@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Packaging
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local secrets/credentials
+backend/credentials.json
+backend/token.pickle
+
+# ML artifacts
+backend/email_sort_model/
+backend/tfidf_model.pkl
+backend/label_encoder.pkl
+
+# Datasets (generated locally)
+dataset/*.csv
