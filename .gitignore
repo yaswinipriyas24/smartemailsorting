@@ -16,6 +16,15 @@ build/
 # IDE
 .vscode/
 
+# Node/Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 # Logs
 *.log
 
@@ -26,6 +35,9 @@ Thumbs.db
 # Local secrets/credentials
 backend/credentials.json
 backend/token.pickle
+backend/token.json
+*.env
+*.env.*
 
 # ML artifacts
 backend/email_sort_model/
@@ -34,3 +46,10 @@ backend/label_encoder.pkl
 
 # Datasets (generated locally)
 dataset/*.csv
+
+# Test/cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
