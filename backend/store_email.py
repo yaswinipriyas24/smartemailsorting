@@ -1,39 +1,96 @@
-from backend.database import SessionLocal
-from models import Email
+# backend/store_email.py
+
+from sqlalchemy.orm import Session
+from backend.models import Email
+from backend.deadline_extractor import extract_deadline
 
 
-def store_email(email_data: dict):
+def store_email(db: Session, email_data: dict):
     """
-    Store classified email into PostgreSQL database
+    Store classified email into database
+
+    Features:
+    - Prevent duplicates per user (email_id + user_id)
+    - Extract deadline intelligence
+    - Auto-mark urgent if deadline <= 2 days
+    - Update existing record if already present
     """
-    db = SessionLocal()
 
-    try:
-        email = Email(
-            email_id=email_data["email_id"],
-            sender=email_data.get("sender"),
-            subject=email_data.get("subject"),
-            body=email_data.get("body"),
-            received_at=email_data.get("received_at"),
+    user_id = email_data.get("user_id")
 
-            category=email_data.get("category"),
-            confidence=email_data.get("confidence"),
-            urgent=email_data.get("urgent"),
-            deadlines=", ".join(email_data.get("deadlines", [])),
+    if not user_id:
+        raise ValueError("user_id is required to store email")
 
-            is_read=False,
-            is_processed=True
-        )
+    # -------------------------------------------------
+    # 1️⃣ Check if email already exists for this user
+    # -------------------------------------------------
+    existing = db.query(Email).filter(
+        Email.email_id == email_data["email_id"],
+        Email.user_id == user_id
+    ).first()
 
-        db.add(email)
+    # -------------------------------------------------
+    # 2️⃣ Deadline Intelligence
+    # -------------------------------------------------
+    full_text = f"{email_data.get('subject', '')} {email_data.get('body', '')}"
+    deadline_info = extract_deadline(full_text)
+
+    deadline_date = None
+    days_remaining = None
+
+    # ML predicted urgency
+    urgent_flag = email_data.get("urgent", False)
+
+    if deadline_info:
+        deadline_date = deadline_info.get("deadline_date")
+        days_remaining = deadline_info.get("days_remaining")
+
+        # 🔥 Auto-mark urgent if <= 2 days
+        if days_remaining is not None and days_remaining <= 2:
+            urgent_flag = True
+
+    # -------------------------------------------------
+    # 3️⃣ If Exists → Update Instead of Recreating
+    # -------------------------------------------------
+    if existing:
+        existing.category = email_data.get("category")
+        existing.confidence = email_data.get("confidence")
+        existing.urgent = urgent_flag
+        existing.deadline_date = deadline_date
+        existing.days_remaining = days_remaining
+        existing.deadlines = ", ".join(email_data.get("deadlines", []) or [])
+
         db.commit()
-        db.refresh(email)
+        db.refresh(existing)
+        return existing
 
-        return email
+    # -------------------------------------------------
+    # 4️⃣ Create New Email
+    # -------------------------------------------------
+    email = Email(
+        email_id=email_data["email_id"],
+        sender=email_data.get("sender"),
+        subject=email_data.get("subject"),
+        body=email_data.get("body"),
+        received_at=email_data.get("received_at"),
 
-    except Exception as e:
-        db.rollback()
-        raise e
+        category=email_data.get("category"),
+        confidence=email_data.get("confidence"),
+        urgent=urgent_flag,
 
-    finally:
-        db.close()
+        deadlines=", ".join(email_data.get("deadlines", []) or []),
+
+        deadline_date=deadline_date,
+        days_remaining=days_remaining,
+
+        user_id=user_id,
+
+        is_read=False,
+        is_processed=True
+    )
+
+    db.add(email)
+    db.commit()
+    db.refresh(email)
+
+    return email

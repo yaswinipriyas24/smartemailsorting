@@ -1,23 +1,49 @@
+# backend/database.py
+
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from dotenv import load_dotenv
 
-# -------------------------------------------------
-# Database configuration
-# -------------------------------------------------
-DATABASE_URL = "postgresql://postgres:9966@localhost:5432/smart_email_db"
+# Load environment variables
+load_dotenv()
 
-engine = create_engine(DATABASE_URL, echo=True)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-SessionLocal = sessionmaker(
-    bind=engine,
-    autoflush=False,
-    autocommit=False
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set in .env file")
+
+# Create engine (SSL only for PostgreSQL)
+connect_args = {}
+if DATABASE_URL.startswith("postgresql"):
+    connect_args["sslmode"] = "require"
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
+# Create session
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# Base class
 Base = declarative_base()
 
+
 # -------------------------------------------------
-# Dependency for FastAPI
+# Create tables automatically
+# -------------------------------------------------
+def init_db():
+    from backend import models  # import models so SQLAlchemy registers them
+    Base.metadata.create_all(bind=engine)
+
+
+# -------------------------------------------------
+# Dependency for FastAPI (optional but clean)
 # -------------------------------------------------
 def get_db():
     db = SessionLocal()
