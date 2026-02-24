@@ -19,7 +19,7 @@ function EmailTable({ hideConfidence = false }) {
         }
 
         const res = await axios.get(
-          "http://localhost:8000/emails?limit=20",
+          "http://localhost:8000/emails?limit=50",
           {
             headers: {
               Authorization: `Bearer ${token}`,
