@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 /**
  * A professionally styled, self-contained Registration component.
@@ -14,11 +16,10 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   
-  // Simulation of navigation since we are in a single-file environment
   const navigateToLogin = () => {
-    console.log("Navigating to login...");
-    // In a real app, you'd use useNavigate() from react-router-dom
+    navigate("/login");
   };
 
   /**
@@ -51,29 +52,22 @@ export default function RegisterPage() {
     }
 
     try {
-      // Endpoint simulation
-      // In production, replace the URL with your actual backend endpoint
-      const response = await fetch("http://localhost:8000/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+      await axios.post("http://localhost:8000/auth/register", {
+        email,
+        username: email,
+        password,
+        confirm_password: confirmPassword,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(formatError(data.detail));
-      }
-
       setSuccess("Registration successful! You can now log in.");
-      // Optional: Delay navigation to show success message
       setTimeout(navigateToLogin, 2000);
       
     } catch (err) {
       console.error("🔴 Registration Failed:", err);
-      setError(err.message || "Cannot reach server. Ensure the Backend is running.");
+      const errorMsg = err.response?.data?.detail 
+        ? formatError(err.response.data.detail) 
+        : "Cannot reach server. Ensure the Backend is running.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -137,6 +131,7 @@ export default function RegisterPage() {
                   id="password"
                   name="password"
                   type="password"
+                  autoComplete="new-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -161,6 +156,7 @@ export default function RegisterPage() {
                   id="confirm-password"
                   name="confirm-password"
                   type="password"
+                  autoComplete="new-password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

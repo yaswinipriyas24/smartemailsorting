@@ -88,7 +88,15 @@ function Dashboard() {
       setError(null); // Clear error on success
     } catch (err) {
       console.error("❌ Sync failed:", err.response?.data || err.message);
-      const errorMsg = err.response?.data?.detail || "Failed to sync emails. Check Gmail connection.";
+      let errorMsg = err.response?.data?.detail || "Failed to sync emails. Check Gmail connection.";
+
+      // Detect invalid_grant (expired/revoked token)
+      const errorString = typeof errorMsg === "object" ? JSON.stringify(errorMsg) : String(errorMsg);
+      if (errorString.includes("invalid_grant") || errorString.includes("Token has been expired")) {
+        setGmailConnected(false); // Reset state to allow reconnection
+        errorMsg = "Gmail connection expired. Please reconnect.";
+      }
+
       setError(errorMsg);
     } finally {
       setSyncing(false);

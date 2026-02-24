@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -24,18 +25,21 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 REDIRECT_URI = "http://127.0.0.1:8000/auth/gmail/callback"
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    confirm_password: str
+    username: str | None = None
+
 # -------------------------------------------------
 # REGISTER
 # -------------------------------------------------
 @router.post("/register")
 def register(
-    email: str,
-    password: str,
+    user_data: RegisterRequest,
     db: Session = Depends(get_db)
 ):
-    existing_user = db.query(User).filter(
-        User.email == email
-    ).first()
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
 
     if existing_user:
         raise HTTPException(
@@ -43,9 +47,12 @@ def register(
             detail="Email already registered, Please Login with your credentials."
         )
 
+    if user_data.password != user_data.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
     new_user = User(
-        email=email,
-        hashed_password=hash_password(password),
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
         role="user"
     )
 
