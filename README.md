@@ -127,30 +127,25 @@ This system reduces information overload and enhances productivity by intelligen
 * gmail_refresh_token
 * gmail_token_expiry
 
-# Email Processing Pipeline
+## 🔁 Email Processing Pipeline
 
+```mermaid
+flowchart TD
+    A[User Clicks Sync] --> B[Fetch Emails from Gmail API]
+    B --> C[ML Classification - DistilBERT]
+    C --> D[Deadline Extraction Engine]
+    D --> E[Urgency Detection Logic]
+    E --> F[Store Processed Email in Database]
+    F --> G[Display Results in Dashboard]
 ```
-User Clicks Sync
-        ↓
-Fetch Emails (Gmail API)
-        ↓
-ML Classification
-        ↓
-Deadline Extraction
-        ↓
-Urgency Detection
-        ↓
-Store in Database
-        ↓
-Display in Dashboard
-```
+
 
 # Installation Guide (End-to-End Setup)
 
 ## Step 1 — Clone Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/yaswinipriyas24/smartemailsorting.git
 cd SMART_EMAIL_SORTING
 ```
 
@@ -280,9 +275,9 @@ This system improves by:
 [X] ML Classification Complete <br>
 [X] Deadline Detection Complete <br>
 [X] Gmail OAuth Integrated <br>
-[] Multi-user Architecture Stable <br>
-[] Dashboard Visualization Implemented <br>
-[] Review Ready
+[ ] Multi-user Architecture Stable <br>
+[ ] Dashboard Visualization Implemented <br>
+[ ] Review Ready
 
 
 
