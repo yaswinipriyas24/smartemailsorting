@@ -276,12 +276,12 @@ This system improves by:
 
 # Project Status
 
-[X] Authentication Complete
-[X] ML Classification Complete
-[X] Deadline Detection Complete
-[X] Gmail OAuth Integrated
-[] Multi-user Architecture Stable
-[] Dashboard Visualization Implemented
+[X] Authentication Complete <br>
+[X] ML Classification Complete <br>
+[X] Deadline Detection Complete <br>
+[X] Gmail OAuth Integrated <br>
+[] Multi-user Architecture Stable <br>
+[] Dashboard Visualization Implemented <br>
 [] Review Ready
 
 
