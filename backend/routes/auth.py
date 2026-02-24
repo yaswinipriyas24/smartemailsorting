@@ -40,7 +40,7 @@ def register(
     if existing_user:
         raise HTTPException(
             status_code=400,
-            detail="Email already registered"
+            detail="Email already registered, Please Login with your credentials."
         )
 
     new_user = User(
@@ -59,6 +59,7 @@ def register(
 # -------------------------------------------------
 # LOGIN
 # -------------------------------------------------
+
 @router.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -74,7 +75,7 @@ def login(
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Invalid credentials, Please check your email and password."
         )
 
     access_token = create_access_token(
@@ -92,8 +93,9 @@ def login(
 
 
 # -------------------------------------------------
-# CONNECT GMAIL (STEP 1)
+# CONNECT GMAIL HERE (STEP 1)
 # -------------------------------------------------
+
 @router.get("/gmail/connect")
 def connect_gmail(
     current_user: User = Depends(get_current_user)

@@ -37,6 +37,7 @@ Base = declarative_base()
 # -------------------------------------------------
 # Create tables automatically
 # -------------------------------------------------
+
 def init_db():
     from backend import models  # import models so SQLAlchemy registers them
     Base.metadata.create_all(bind=engine)
@@ -45,6 +46,7 @@ def init_db():
 # -------------------------------------------------
 # Dependency for FastAPI (optional but clean)
 # -------------------------------------------------
+
 def get_db():
     db = SessionLocal()
     try:

@@ -42,7 +42,7 @@ def connect_gmail(current_user: User = Depends(get_current_user)):
         redirect_uri=REDIRECT_URI,
     )
 
-    # 🔥 Store user_id inside state (secure linking)
+    # Store user_id inside state (secure linking)
     auth_url, state = flow.authorization_url(
         access_type="offline",
         prompt="consent",
@@ -58,7 +58,7 @@ def connect_gmail(current_user: User = Depends(get_current_user)):
 @router.get("/callback")
 def gmail_callback(
     code: str,
-    state: str,  # 🔥 contains user_id
+    state: str,  # contains user_id
     db: Session = Depends(get_db),
 ):
     """
@@ -75,13 +75,13 @@ def gmail_callback(
         flow.fetch_token(code=code)
         credentials = flow.credentials
 
-        print(f"🔍 Credentials Info:")
+        print(f" Credentials Info:")
         print(f"   Token type: {type(credentials.token)}")
         print(f"   Token value: {credentials.token is not None}")
         print(f"   Refresh token type: {type(credentials.refresh_token)}")
         print(f"   Refresh token value: {credentials.refresh_token is not None}")
 
-        # 🔥 Get user using state (user_id)
+        # Get user using state (user_id)
         user = db.query(User).filter(User.id == int(state)).first()
 
         if not user:
@@ -104,29 +104,29 @@ def gmail_callback(
 
         # Also store full credentials as JSON for future refresh
         credentials_json = credentials.to_json()
-        print(f"✅ Full credentials saved: {len(credentials_json)} bytes")
+        print(f"Full credentials saved: {len(credentials_json)} bytes")
 
         db.commit()
         db.refresh(user)
 
-        print(f"✅ Gmail OAuth successful for user {user.email}")
+        print(f"Gmail OAuth successful for user {user.email}")
         print(f"   Gmail Email: {gmail_email}")
         print(f"   Access Token saved: {bool(user.gmail_access_token)}")
         print(f"   Refresh Token saved: {bool(user.gmail_refresh_token)}")
 
-        # 🔥 Auto sync emails after connection
+        # Auto sync emails after connection
         try:
             sync_result = sync_emails(user_id=user.id, limit=20)
-            print(f"✅ Auto-sync completed: {sync_result}")
+            print(f"Auto-sync completed: {sync_result}")
         except Exception as sync_error:
-            print(f"⚠️ Auto-sync failed: {sync_error}")
+            print(f"Auto-sync failed: {sync_error}")
 
         return RedirectResponse(
             url="http://localhost:3000/dashboard"
         )
 
     except Exception as e:
-        print(f"❌ Gmail callback error: {str(e)}")
+        print(f"Gmail callback error: {str(e)}")
         import traceback
         traceback.print_exc()
         return RedirectResponse(

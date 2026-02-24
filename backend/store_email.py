@@ -22,7 +22,7 @@ def store_email(db: Session, email_data: dict):
         raise ValueError("user_id is required to store email")
 
     # -------------------------------------------------
-    # 1️⃣ Check if email already exists for this user
+    # 1. Check if email already exists for this user
     # -------------------------------------------------
     existing = db.query(Email).filter(
         Email.email_id == email_data["email_id"],
@@ -30,7 +30,7 @@ def store_email(db: Session, email_data: dict):
     ).first()
 
     # -------------------------------------------------
-    # 2️⃣ Deadline Intelligence
+    # 2. Deadline Intelligence
     # -------------------------------------------------
     full_text = f"{email_data.get('subject', '')} {email_data.get('body', '')}"
     deadline_info = extract_deadline(full_text)
@@ -45,12 +45,12 @@ def store_email(db: Session, email_data: dict):
         deadline_date = deadline_info.get("deadline_date")
         days_remaining = deadline_info.get("days_remaining")
 
-        # 🔥 Auto-mark urgent if <= 2 days
+        # Auto-mark urgent if <= 2 days
         if days_remaining is not None and days_remaining <= 2:
             urgent_flag = True
 
     # -------------------------------------------------
-    # 3️⃣ If Exists → Update Instead of Recreating
+    # 3. If Exists → Update Instead of Recreating
     # -------------------------------------------------
     if existing:
         existing.category = email_data.get("category")
@@ -65,7 +65,7 @@ def store_email(db: Session, email_data: dict):
         return existing
 
     # -------------------------------------------------
-    # 4️⃣ Create New Email
+    # 4️. Create New Email
     # -------------------------------------------------
     email = Email(
         email_id=email_data["email_id"],

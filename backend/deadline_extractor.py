@@ -18,7 +18,7 @@ def extract_deadline(text: str):
         return None
 
     # -----------------------------------------
-    # 1️⃣ Try smart parsing using dateparser
+    # 1️. Try smart parsing using dateparser
     # -----------------------------------------
     parsed_date = dateparser.parse(
         text,
@@ -39,7 +39,7 @@ def extract_deadline(text: str):
         }
 
     # -----------------------------------------
-    # 2️⃣ Fallback Regex (Manual patterns)
+    # 2️. Fallback Regex (Manual patterns)
     # -----------------------------------------
     DATE_PATTERNS = [
         r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b",

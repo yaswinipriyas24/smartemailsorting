@@ -14,7 +14,8 @@ from backend.database import init_db, get_db
 from backend.models import Email, User
 from backend.routes import auth
 from backend.auth_utils import get_current_user, require_admin
-# 🔥 FIXED IMPORT: Using your actual pipeline file
+
+# FIXED IMPORT: Using your actual pipeline file
 from backend.pipeline import run_pipeline 
 from backend.gmail_oauth import router as gmail_router
 
@@ -23,7 +24,7 @@ from backend.gmail_oauth import router as gmail_router
 # -------------------------------------------------
 app = FastAPI(
     title="Smart Email Sorting System",
-    version="3.3"
+    version="1.1.0.3"
 )
 
 # -------------------------------------------------
@@ -55,7 +56,7 @@ def favicon():
 
 @app.get("/")
 def root():
-    return {"status": "Smart Email Sorting API is running 🚀"}
+    return {"status": "Smart Email Sorting API is running"}
 
 # =================================================
 # AUTH HELPER ENDPOINT
@@ -92,9 +93,9 @@ def connect_gmail(
     db.refresh(current_user)
 
     # 2. Trigger Auto-Sync
-    print(f"🔗 Gmail Connected for {current_user.email}. Starting Pipeline...")
+    print(f"Gmail Connected for {current_user.email}. Starting Pipeline...")
     try:
-        # 🔥 Using your pipeline.py logic
+        # Using your pipeline.py logic
         sync_result = run_pipeline(
             user_id=current_user.id,
             limit=20,
@@ -126,7 +127,7 @@ def sync_emails_endpoint(
         )
 
     try:
-        # 🔥 Using your pipeline.py logic
+        # Using your pipeline.py logic
         result = run_pipeline(
             user_id=current_user.id,
             limit=limit,

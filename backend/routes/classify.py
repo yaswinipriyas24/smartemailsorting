@@ -24,13 +24,13 @@ class EmailRequest(BaseModel):
 @router.post("/classify")
 def classify_email_api(request: EmailRequest):
 
-    # 1️⃣ Run ML classification
+    # 1️. Run ML classification
     prediction = classify_email(
         subject=request.subject,
         body=request.body
     )
 
-    # 2️⃣ Prepare data for DB
+    # 2️. Prepare data for DB
     email_data = {
         "email_id": request.email_id,
         "sender": request.sender,
@@ -44,10 +44,10 @@ def classify_email_api(request: EmailRequest):
         "deadlines": prediction["deadlines"]
     }
 
-    # 3️⃣ Store in database
+    # 3️. Store in database
     store_email(email_data)
 
-    # 4️⃣ Return response to frontend
+    # 4️. Return response to frontend
     return {
         "status": "success",
         "result": prediction

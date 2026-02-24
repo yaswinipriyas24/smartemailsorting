@@ -17,7 +17,7 @@ DATA_PATH = os.path.join(BASE_DIR, "dataset", "emails.csv")
 # --------------------------------------------------
 df = pd.read_csv(DATA_PATH)
 
-# 🔽 SAFE MODE: use subset to avoid long CPU training
+# SAFE MODE: use subset to avoid long CPU training
 df = df.sample(2000, random_state=42)
 
 # Combine subject + body
@@ -95,7 +95,7 @@ model.compile(
 # --------------------------------------------------
 # 9. Train
 # --------------------------------------------------
-print("\n🚀 Starting DistilBERT training...\n")
+print("\n Starting DistilBERT training...\n")
 
 model.fit(
     train_dataset,
@@ -114,4 +114,4 @@ joblib.dump(
     os.path.join(BASE_DIR, "backend", "label_encoder.pkl")
 )
 
-print("\n✅ Model training completed and saved successfully!")
+print("\n Model training completed and saved successfully!")

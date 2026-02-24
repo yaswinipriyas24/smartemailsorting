@@ -44,17 +44,14 @@ MARKETING_WORDS = [
 ]
 
 # -------------------------------------------------
-# ✅ MAIN FUNCTION (THIS WAS THE PROBLEM)
-# -------------------------------------------------
-# -------------------------------------------------
-# ✅ MAIN FUNCTION (UPDATED SMART LOGIC)
+# MAIN FUNCTION (UPDATED SMART LOGIC)
 # -------------------------------------------------
 def classify_email(subject: str, body: str):
     text = f"{subject} {body}"
     text_lower = text.lower()
 
     # ---------------------------------------
-    # 🔹 TF-IDF prediction
+    # TF-IDF prediction
     # ---------------------------------------
     vec = vectorizer.transform([text_lower])
     probs = classifier.predict_proba(vec)[0]
@@ -63,19 +60,19 @@ def classify_email(subject: str, body: str):
     label = classifier.classes_[np.argmax(probs)]
 
     # ---------------------------------------
-    # 🔹 Deadline extraction
+    # Deadline extraction
     # ---------------------------------------
     doc = nlp(body)
     deadlines = [e.text for e in doc.ents if e.label_ in ["DATE", "TIME"]]
 
     # ---------------------------------------
-    # 🔹 Smart Urgency Rules
+    # Smart Urgency Rules
     # ---------------------------------------
 
-    # 1️⃣ Strong urgency keywords
+    # 1. Strong urgency keywords
     has_urgent_words = any(w in text_lower for w in URGENT_WORDS)
 
-    # 2️⃣ Order-specific urgency
+    #  2. Order-specific urgency
     order_urgent_phrases = [
         "arriving today",
         "out for delivery",
@@ -89,7 +86,7 @@ def classify_email(subject: str, body: str):
         and any(p in text_lower for p in order_urgent_phrases)
     )
 
-    # 3️⃣ Marketing should NEVER be urgent
+    # 3️. Marketing should NEVER be urgent
     if label == "Marketing":
         urgent = False
     else:

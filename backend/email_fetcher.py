@@ -46,7 +46,7 @@ def get_service():
 # -------------------------------------------------
 def get_service_for_user(user: User):
     if not user.gmail_refresh_token:
-        raise ValueError(f"❌ User {user.email} has no Gmail refresh token; connect Gmail first")
+        raise ValueError(f"User {user.email} has no Gmail refresh token; connect Gmail first")
     
     with open(CREDENTIALS_FILE, "r") as f:
         client_config = json.load(f)
@@ -56,7 +56,7 @@ def get_service_for_user(user: User):
     client_secret = client.get("client_secret")
     token_uri = client.get("token_uri", "https://oauth2.googleapis.com/token")
     
-    print(f"🔗 Building Gmail service for {user.email}")
+    print(f"    Building Gmail service for {user.email}")
     print(f"   Access Token: {bool(user.gmail_access_token)}")
     print(f"   Refresh Token: {bool(user.gmail_refresh_token)}")
     
@@ -70,7 +70,7 @@ def get_service_for_user(user: User):
     )
     
     service = build("gmail", "v1", credentials=creds)
-    print(f"✅ Gmail service built successfully")
+    print(f"Gmail service built successfully")
     return service
 
 
@@ -184,7 +184,8 @@ def _extract_body(payload):
 # -------------------------------------------------
 # Fetch Emails (pagination supported) — uses token.json (single-user/CLI)
 # -------------------------------------------------
-def fetch_emails(max_emails=50):
+
+def fetch_emails(max_emails=100):
     service = get_service()
     return _fetch_emails_with_service(service, max_emails)
 
@@ -192,7 +193,8 @@ def fetch_emails(max_emails=50):
 # -------------------------------------------------
 # Fetch Emails for a specific user (uses DB-stored OAuth tokens)
 # -------------------------------------------------
-def fetch_emails_for_user(user_id: int, max_emails: int = 50):
+
+def fetch_emails_for_user(user_id: int, max_emails: int = 100):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -204,7 +206,7 @@ def fetch_emails_for_user(user_id: int, max_emails: int = 50):
         db.close()
 
 
-def _fetch_emails_with_service(service, max_emails=50):
+def _fetch_emails_with_service(service, max_emails=100):
     emails = []
     response = service.users().messages().list(
         userId="me",

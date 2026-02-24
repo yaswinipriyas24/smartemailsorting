@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # ------------------------------------------------------------------
-# 🔥 NOTE: This function is defined HERE. It should NOT be imported.
+# NOTE: This function is defined HERE. It should NOT be imported.
 # ------------------------------------------------------------------
 def sync_emails(user_id: int, limit: int = 50, clear_db: bool = False):
     """
@@ -23,13 +23,13 @@ def sync_emails(user_id: int, limit: int = 50, clear_db: bool = False):
     try:
         # 1. Optional Clear
         if clear_db:
-            logging.info(f"🗑 Clearing emails for user {user_id}...")
+            logging.info(f"Clearing emails for user {user_id}...")
             db.query(Email).filter(Email.user_id == user_id).delete()
             db.commit()
 
         # 2. Fetch
         emails = fetch_emails_for_user(user_id, limit)
-        logging.info(f"📥 Fetched {len(emails)} emails")
+        logging.info(f"Fetched {len(emails)} emails")
 
         stored_count = 0
         category_counter = {}
@@ -58,10 +58,10 @@ def sync_emails(user_id: int, limit: int = 50, clear_db: bool = False):
                     cat = ml_result.get("category", "Unknown")
                     category_counter[cat] = category_counter.get(cat, 0) + 1
                     
-                    logging.info(f"✅ Stored | {email.get('subject', '')[:30]}... -> {cat}")
+                    logging.info(f"Stored | {email.get('subject', '')[:30]}... -> {cat}")
 
             except Exception as e:
-                logging.error(f"⚠ Skipped email: {str(e)}")
+                logging.error(f"Skipped email: {str(e)}")
                 continue
 
         return {
@@ -73,11 +73,11 @@ def sync_emails(user_id: int, limit: int = 50, clear_db: bool = False):
 
     except SQLAlchemyError as db_error:
         db.rollback()
-        logging.error(f"❌ Database Error: {str(db_error)}")
+        logging.error(f"Database Error: {str(db_error)}")
         return {"status": "error", "message": "Database error"}
 
     except Exception as e:
-        logging.error(f"❌ Unexpected Error: {str(e)}")
+        logging.error(f"Unexpected Error: {str(e)}")
         return {"status": "error", "message": str(e)}
 
     finally:

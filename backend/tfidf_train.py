@@ -64,7 +64,7 @@ classifier.fit(X_train_vec, y_train)
 y_pred = classifier.predict(X_test_vec)
 acc = accuracy_score(y_test, y_pred)
 
-print("\n✅ TF-IDF BASELINE RESULTS")
+print("\n TF-IDF BASELINE RESULTS")
 print(f"Accuracy: {acc:.4f}")
 print("\nClassification Report:\n")
 print(classification_report(y_test, y_pred))
@@ -80,4 +80,4 @@ joblib.dump(
     MODEL_PATH
 )
 
-print(f"\n✅ TF-IDF model saved successfully at:\n{MODEL_PATH}")
+print(f"\n TF-IDF model saved successfully at:\n{MODEL_PATH}")

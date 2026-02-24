@@ -106,13 +106,13 @@ def run_tests():
     ]
 
     for i, email in enumerate(test_emails, start=1):
-        print(f"\n📧 TEST EMAIL {i}")
+        print(f"\n TEST EMAIL {i}")
         print("Subject:", email["subject"])
         print("Body:", email["body"])
 
         result = classify_email(email["subject"], email["body"])
 
-        print("🔍 Prediction Result:")
+        print("Prediction Result:")
         for key, value in result.items():
             print(f"  {key}: {value}")
 

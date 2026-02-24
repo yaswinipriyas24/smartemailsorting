@@ -27,13 +27,13 @@ def run_pipeline(user_id: int, limit: int = 50, clear_existing: bool = False):
     db = SessionLocal()
 
     try:
-        logging.info("🚀 Starting Smart Email Pipeline")
+        logging.info("Starting Smart Email Pipeline")
 
         # ---------------------------------------
         # Optional Full Refresh
         # ---------------------------------------
         if clear_existing:
-            logging.info("🗑 Clearing existing emails for user")
+            logging.info("Clearing existing emails for user")
             db.query(Email).filter(Email.user_id == user_id).delete()
             db.commit()
 
@@ -41,7 +41,7 @@ def run_pipeline(user_id: int, limit: int = 50, clear_existing: bool = False):
         # Step 1 — Fetch (using this user's Gmail tokens)
         # ---------------------------------------
         emails = fetch_emails_for_user(user_id, limit)
-        logging.info(f"📥 Fetched {len(emails)} emails")
+        logging.info(f"Fetched {len(emails)} emails")
 
         stored_count = 0
         category_counter = {}
@@ -72,20 +72,20 @@ def run_pipeline(user_id: int, limit: int = 50, clear_existing: bool = False):
                     category_counter[cat] = category_counter.get(cat, 0) + 1
 
                     logging.info(
-                        f"✅ Stored: {(saved.subject or '')[:40]} → {saved.category}"
+                        f"Stored: {(saved.subject or '')[:40]} → {saved.category}"
                     )
 
             except Exception as e:
-                logging.error(f"❌ Failed processing email: {e}")
+                logging.error(f"Failed processing email: {e}")
 
         # ---------------------------------------
         # Summary
         # ---------------------------------------
-        logging.info("📊 Category Distribution:")
+        logging.info("Category Distribution:")
         for cat, count in category_counter.items():
             logging.info(f"   {cat}: {count}")
 
-        logging.info("🎯 Pipeline Completed Successfully")
+        logging.info("Pipeline Completed Successfully")
 
         return {
             "fetched": len(emails),
