@@ -386,7 +386,7 @@ export default function DashboardPage() {
               style={{ minHeight: "40px", width: "100%", marginTop: 0, paddingLeft: "34px" }}
             />
           </div>
-          <button className="sync-btn" onClick={handleSync} disabled={syncing}>
+          <button className="reply-btn" onClick={handleSync} disabled={syncing}>
             <FaSyncAlt style={{ marginRight: "6px" }} />
             {syncing ? "Syncing..." : "Sync Emails"}
           </button>
