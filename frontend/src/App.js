@@ -3,9 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 
 // Import Pages
 import LoginPage from "./pages/LoginPage";
-import Dashboard from "./pages/Dashboard";
+import DashboardPage from "./pages/DashboardPage";
 import ConnectGmailPage from "./pages/ConnectGmailPage";
-import UserPage from "./pages/UserPage";
 
 // 🔒 Authentication Guard: Redirects to login if no token exists
 const PrivateRoute = ({ children }) => {
@@ -26,7 +25,7 @@ function App() {
             path="/dashboard" 
             element={
               <PrivateRoute>
-                <Dashboard />
+                <DashboardPage />
               </PrivateRoute>
             } 
           />
@@ -45,7 +44,7 @@ function App() {
             path="/user"
             element={
               <PrivateRoute>
-                <UserPage />
+                <DashboardPage />
               </PrivateRoute>
             }
           />

@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 from backend.database import SessionLocal
 from backend.models import User
@@ -44,7 +45,7 @@ def get_service():
 # -------------------------------------------------
 # Build Gmail service from user's stored OAuth tokens (multi-user)
 # -------------------------------------------------
-def get_service_for_user(user: User):
+def get_service_for_user(user: User, db=None):
     if not user.gmail_refresh_token:
         raise ValueError(f"User {user.email} has no Gmail refresh token; connect Gmail first")
     
@@ -68,6 +69,15 @@ def get_service_for_user(user: User):
         client_secret=client_secret,
         scopes=SCOPES,
     )
+
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        user.gmail_access_token = creds.token or user.gmail_access_token
+        user.gmail_token_expiry = creds.expiry
+        if creds.refresh_token:
+            user.gmail_refresh_token = creds.refresh_token
+        if db is not None:
+            db.commit()
     
     service = build("gmail", "v1", credentials=creds)
     print(f"Gmail service built successfully")
@@ -200,7 +210,7 @@ def fetch_emails_for_user(user_id: int, max_emails: int = 100):
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise ValueError(f"User id {user_id} not found")
-        service = get_service_for_user(user)
+        service = get_service_for_user(user, db=db)
         return _fetch_emails_with_service(service, max_emails)
     finally:
         db.close()

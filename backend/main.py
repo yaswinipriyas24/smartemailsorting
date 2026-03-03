@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+import logging
 
 from backend.database import init_db, get_db
 from backend.models import Email, User
@@ -26,6 +27,7 @@ app = FastAPI(
     title="Smart Email Sorting System",
     version="1.1.0.3"
 )
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------
 # CORS Configuration
@@ -63,11 +65,15 @@ def root():
 # =================================================
 @app.get("/auth/me")
 def get_current_user_info(current_user: User = Depends(get_current_user)):
+    gmail_connected = bool(
+        current_user.gmail_email and current_user.gmail_refresh_token
+    )
     return {
         "id": current_user.id,
         "email": current_user.email,
         "role": current_user.role,
-        "gmail_email": current_user.gmail_email
+        "gmail_email": current_user.gmail_email,
+        "gmail_connected": gmail_connected
     }
 
 # =================================================
@@ -120,10 +126,10 @@ def sync_emails_endpoint(
     clear_db: bool = False,
     current_user: User = Depends(get_current_user)
 ):
-    if not current_user.gmail_email:
+    if not current_user.gmail_email or not current_user.gmail_refresh_token:
         raise HTTPException(
             status_code=400,
-            detail="Connect Gmail before syncing emails"
+            detail="Gmail OAuth not connected. Please connect Gmail."
         )
 
     try:
@@ -133,9 +139,21 @@ def sync_emails_endpoint(
             limit=limit,
             clear_existing=clear_db
         )
-        return result
+        if isinstance(result, dict) and result.get("status") == "error":
+            logger.error("Sync returned error for user_id=%s: %s", current_user.id, result)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Sync failed: {result.get('message', 'unknown error')}"
+            )
+
+        return {
+            "status": "success",
+            **(result if isinstance(result, dict) else {"data": result})
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Sync error: {str(e)}")
+        logger.exception("Sync exception for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=500,
             detail=f"Sync failed: {str(e)}"
@@ -177,10 +195,37 @@ def get_emails(
                 "urgent": e.urgent,
                 "deadline_date": e.deadline_date.isoformat() if e.deadline_date else None,
                 "days_remaining": e.days_remaining,
-                "is_read": e.is_read
+                "is_read": e.is_read,
+                "is_resolved": e.is_read
             }
             for e in emails
         ]
+    }
+
+
+@app.patch("/emails/{email_id}/resolve")
+def resolve_email(
+    email_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    email = (
+        db.query(Email)
+        .filter(Email.id == email_id, Email.user_id == current_user.id)
+        .first()
+    )
+
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    email.is_read = True
+    db.commit()
+    db.refresh(email)
+
+    return {
+        "message": "Email marked as resolved",
+        "id": email.id,
+        "is_resolved": True
     }
 
 @app.get("/emails/urgent")

@@ -31,6 +31,12 @@ class RegisterRequest(BaseModel):
     confirm_password: str
     username: str | None = None             
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+    confirm_password: str
+
 # -------------------------------------------------
 # REGISTER
 # -------------------------------------------------
@@ -97,6 +103,29 @@ def login(
         "token_type": "bearer",
         "role": user.role
     }
+
+
+# -------------------------------------------------
+# FORGOT / RESET PASSWORD (DEMO MODE)
+# -------------------------------------------------
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    email = payload.email.strip().lower()
+
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email")
+
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    return {"message": "Password reset successful. Please login."}
 
 
 # -------------------------------------------------

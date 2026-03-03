@@ -87,6 +87,33 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.auth-input-wrap {
+  position: relative;
+}
+
+.auth-input-wrap .auth-input {
+  padding-right: 72px;
+}
+
+.auth-toggle-pass {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.auth-toggle-pass:hover {
+  background: #ecfeff;
+}
+
 .auth-input:focus {
   border-color: #0f766e;
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
@@ -135,7 +162,7 @@
   box-shadow: 0 12px 20px rgba(15, 23, 42, 0.2);
 }
 
-.auth-submit.disabled {
+.auth-submit:disabled {
   opacity: 0.7;
   cursor: not-allowed;
   transform: none;
@@ -151,6 +178,26 @@
   flex-wrap: wrap;
   font-size: 14px;
   color: #475569;
+}
+
+.auth-forgot-wrap {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-forgot-btn {
+  border: none;
+  background: transparent;
+  color: #0e7490;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-forgot-btn:hover {
+  text-decoration: underline;
 }
 
 .auth-switch-btn {

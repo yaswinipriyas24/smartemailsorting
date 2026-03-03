@@ -219,7 +219,8 @@ body {
 /* ================= TABLE ================= */
 .email-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: #ffffff;
   border-radius: 16px;
   overflow: hidden;
@@ -262,9 +263,17 @@ body {
   background-color: #fff1f2;
 }
 
+.email-table tr.urgent-row:hover {
+  background-color: #ffe1e1;
+}
+
 /* Highlight overdue row */
 .email-table tr.overdue-row {
   background-color: #ffe4e6;
+}
+
+.email-table tr.overdue-row:hover {
+  background-color: #fecdd3;
 }
 
 /* ================= BADGES ================= */
