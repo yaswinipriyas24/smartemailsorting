@@ -1,10 +1,8 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
 
-/* ------------------------------------
-   🎯 All 17 Categories
------------------------------------- */
 const ALL_CATEGORIES = [
   "Announcements",
   "Customer Support",
@@ -26,43 +24,46 @@ const ALL_CATEGORIES = [
 ];
 
 function UserPage() {
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+
   const [emails, setEmails] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  /* ------------------------------------
-     📥 Fetch Emails
-  ------------------------------------ */
   useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
     axios
-      .get("/emails?limit=150")
+      .get("http://localhost:8000/emails?limit=150", {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       .then((res) => {
         const data = res.data?.data || [];
         setEmails(data);
       })
-      .catch((err) => console.error("Fetch error:", err))
+      .catch((err) => {
+        console.error("Fetch error:", err);
+        setError("Failed to load emails.");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [navigate, token]);
 
-  /* ------------------------------------
-     🧠 Smart Sorting
-     1️⃣ Urgent first
-     2️⃣ High confidence next
-  ------------------------------------ */
   const sortedEmails = useMemo(() => {
     return [...emails].sort((a, b) => {
       if (a.urgent !== b.urgent) {
-        return b.urgent - a.urgent;
+        return Number(b.urgent) - Number(a.urgent);
       }
       return (b.confidence || 0) - (a.confidence || 0);
     });
   }, [emails]);
 
-  /* ------------------------------------
-     📊 Counts
-  ------------------------------------ */
   const urgentCount = useMemo(
     () => emails.filter((e) => e.urgent).length,
     [emails]
@@ -78,110 +79,65 @@ function UserPage() {
     [emails]
   );
 
-  /* ------------------------------------
-     🔎 Filtering Logic
-  ------------------------------------ */
   const filteredEmails = useMemo(() => {
     if (selectedCategory === "All") return sortedEmails;
-
-    if (selectedCategory === "Urgent")
-      return sortedEmails.filter((e) => e.urgent);
-
-    if (selectedCategory === "Unread")
-      return sortedEmails.filter((e) => !e.is_read);
-
-    if (selectedCategory === "Read")
-      return sortedEmails.filter((e) => e.is_read);
-
-    return sortedEmails.filter(
-      (e) => e.category === selectedCategory
-    );
+    if (selectedCategory === "Urgent") return sortedEmails.filter((e) => e.urgent);
+    if (selectedCategory === "Unread") return sortedEmails.filter((e) => !e.is_read);
+    if (selectedCategory === "Read") return sortedEmails.filter((e) => e.is_read);
+    return sortedEmails.filter((e) => e.category === selectedCategory);
   }, [selectedCategory, sortedEmails]);
 
-  const categories = [
-    "All",
-    "Urgent",
-    "Unread",
-    "Read",
-    ...ALL_CATEGORIES
-  ];
+  const categories = ["All", "Urgent", "Unread", "Read", ...ALL_CATEGORIES];
 
-  /* ------------------------------------
-     📬 Open Email + Mark Read
-  ------------------------------------ */
-  const openEmail = async (email) => {
-    setSelectedEmail(email);
+  const openEmail = (email) => {
+    setSelectedEmail({
+      ...email,
+      sender: email.sender || "Unknown sender",
+      body: email.body || "Email body preview is not available in this view."
+    });
 
     if (!email.is_read) {
-      try {
-        await axios.put(`/emails/${email.id}/mark-read`);
-        setEmails((prev) =>
-          prev.map((e) =>
-            e.id === email.id ? { ...e, is_read: true } : e
-          )
-        );
-      } catch (err) {
-        console.error("Mark read error:", err);
-      }
+      setEmails((prev) =>
+        prev.map((e) => (e.id === email.id ? { ...e, is_read: true } : e))
+      );
     }
   };
 
-  /* ------------------------------------
-     ✉ Send Reply (Future Hook)
-  ------------------------------------ */
-  const handleReply = async () => {
+  const handleReply = () => {
     if (!replyText.trim()) return;
-
-    try {
-      await axios.post(`/emails/${selectedEmail.id}/reply`, {
-        content: replyText
-      });
-      alert("Reply Sent Successfully!");
-      setReplyText("");
-    } catch (err) {
-      console.error("Reply error:", err);
-    }
+    alert("Reply API is not available yet.");
+    setReplyText("");
   };
 
   return (
     <div className="dashboard">
-      <h1 className="title">
-        📧 Smart Email Intelligence Dashboard
-      </h1>
+      <h1 className="title">Smart Email Intelligence Dashboard</h1>
+
+      {error && <p className="error" style={{ color: "red" }}>{error}</p>}
 
       {urgentCount > 0 && (
         <div className="insight-banner">
-          ⚠️ You have <strong>{urgentCount}</strong> urgent emails.
+          You have <strong>{urgentCount}</strong> urgent emails.
         </div>
       )}
 
-      {/* 📊 Status Cards */}
       <div className="category-overview">
-        <div
-          className="category-card"
-          onClick={() => setSelectedCategory("Unread")}
-        >
-          <h4>📩 Unread</h4>
+        <div className="category-card" onClick={() => setSelectedCategory("Unread")}>
+          <h4>Unread</h4>
           <p>{unreadCount}</p>
         </div>
 
-        <div
-          className="category-card"
-          onClick={() => setSelectedCategory("Read")}
-        >
-          <h4>📖 Read</h4>
+        <div className="category-card" onClick={() => setSelectedCategory("Read")}>
+          <h4>Read</h4>
           <p>{readCount}</p>
         </div>
       </div>
 
-      {/* 🎛 Filters */}
       <div className="filter-container">
-        {categories.map((category, index) => (
+        {categories.map((category) => (
           <button
-            key={index}
-            className={`filter-btn ${
-              selectedCategory === category ? "active" : ""
-            }`}
+            key={category}
+            className={`filter-btn ${selectedCategory === category ? "active" : ""}`}
             onClick={() => setSelectedCategory(category)}
           >
             {category}
@@ -189,11 +145,8 @@ function UserPage() {
         ))}
       </div>
 
-      {/* 📋 Email Table */}
       <div className="email-section">
-        <h2 className="section-title">
-          {selectedCategory} Emails
-        </h2>
+        <h2 className="section-title">{selectedCategory} Emails</h2>
 
         <table className="email-table">
           <thead>
@@ -228,50 +181,34 @@ function UserPage() {
                 >
                   <td
                     className="subject"
-                    style={{
-                      fontWeight: email.is_read
-                        ? "normal"
-                        : "600"
-                    }}
+                    style={{ fontWeight: email.is_read ? "normal" : "600" }}
                   >
                     {email.subject}
                   </td>
 
                   <td>
-                    <span className="badge category">
-                      {email.category}
-                    </span>
+                    <span className="badge category">{email.category}</span>
                   </td>
 
                   <td>
                     {email.confidence
-                      ? (email.confidence * 100).toFixed(1) + "%"
+                      ? `${(email.confidence * 100).toFixed(1)}%`
                       : "0%"}
                   </td>
 
-                  {/* Priority */}
                   <td>
                     {email.urgent ? (
-                      <span className="badge urgent">
-                        Urgent
-                      </span>
+                      <span className="badge urgent">Urgent</span>
                     ) : (
-                      <span className="badge normal">
-                        Normal
-                      </span>
+                      <span className="badge normal">Normal</span>
                     )}
                   </td>
 
-                  {/* Status */}
                   <td>
                     {email.is_read ? (
-                      <span className="badge normal">
-                        Read
-                      </span>
+                      <span className="badge normal">Read</span>
                     ) : (
-                      <span className="badge unread">
-                        Unread
-                      </span>
+                      <span className="badge unread">Unread</span>
                     )}
                   </td>
                 </tr>
@@ -281,37 +218,27 @@ function UserPage() {
         </table>
       </div>
 
-      {/* 📬 Email Modal */}
       {selectedEmail && (
         <div className="email-modal">
           <div className="email-modal-content">
             <h3>{selectedEmail.subject}</h3>
-            <p><strong>From:</strong> {selectedEmail.sender}</p>
+            <p>
+              <strong>From:</strong> {selectedEmail.sender}
+            </p>
             <hr />
-            <div className="email-body">
-              {selectedEmail.body}
-            </div>
+            <div className="email-body">{selectedEmail.body}</div>
 
             <textarea
               placeholder="Type your reply..."
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              style={{
-                width: "100%",
-                height: "100px",
-                marginTop: "15px"
-              }}
+              style={{ width: "100%", height: "100px", marginTop: "15px" }}
             />
 
             <div style={{ marginTop: "10px" }}>
-              <button onClick={handleReply}>
-                Send Reply
-              </button>
+              <button onClick={handleReply}>Send Reply</button>
 
-              <button
-                onClick={() => setSelectedEmail(null)}
-                style={{ marginLeft: "10px" }}
-              >
+              <button onClick={() => setSelectedEmail(null)} style={{ marginLeft: "10px" }}>
                 Close
               </button>
             </div>
