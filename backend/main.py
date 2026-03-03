@@ -166,7 +166,12 @@ def get_emails(
         "data": [
             {
                 "id": e.id,
+                "email_id": e.email_id,
+                "sender": e.sender,
+                "to_email": current_user.gmail_email or current_user.email,
                 "subject": e.subject,
+                "body": e.body,
+                "received_at": e.received_at.isoformat() if e.received_at else None,
                 "category": e.category,
                 "confidence": e.confidence,
                 "urgent": e.urgent,
