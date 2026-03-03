@@ -8,7 +8,9 @@ import {
   FaCheckCircle,
   FaLink,
   FaSyncAlt,
-  FaInbox
+  FaInbox,
+  FaChartPie,
+  FaChartLine,
 } from "react-icons/fa";
 import "../styles/dashboard.css";
 import { getStoredPreferences, syncPreferencesFromProfile } from "../utils/userPreferences";
@@ -377,6 +379,58 @@ export default function DashboardPage() {
     return { total, urgent, resolved };
   }, [emails]);
 
+  const analytics = useMemo(() => {
+    const byCategory = {};
+    for (const email of emails) {
+      const key = email.category || "Uncategorized";
+      byCategory[key] = (byCategory[key] || 0) + 1;
+    }
+    const categoryRows = Object.entries(byCategory)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+    const topCategories = categoryRows.slice(0, 6);
+    const maxCategoryCount = topCategories[0]?.count || 1;
+
+    const today = new Date();
+    const dayBuckets = Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (6 - idx));
+      d.setHours(0, 0, 0, 0);
+      return { date: d, label: d.toLocaleDateString(undefined, { weekday: "short" }), count: 0 };
+    });
+    const bucketMap = new Map(dayBuckets.map((d) => [d.date.getTime(), d]));
+
+    for (const email of emails) {
+      const raw = email.received_at || email.created_at;
+      if (!raw) continue;
+      const dt = new Date(raw);
+      dt.setHours(0, 0, 0, 0);
+      const bucket = bucketMap.get(dt.getTime());
+      if (bucket) bucket.count += 1;
+    }
+
+    const maxDaily = Math.max(...dayBuckets.map((d) => d.count), 1);
+    const chartWidth = 420;
+    const chartHeight = 120;
+    const points = dayBuckets.map((d, i) => {
+      const x = (i / (dayBuckets.length - 1 || 1)) * chartWidth;
+      const y = chartHeight - (d.count / maxDaily) * chartHeight;
+      return `${x},${y}`;
+    }).join(" ");
+
+    const urgentPercent = stats.total ? Math.round((stats.urgent / stats.total) * 100) : 0;
+
+    return {
+      topCategories,
+      maxCategoryCount,
+      dayBuckets,
+      dailyPoints: points,
+      chartWidth,
+      chartHeight,
+      urgentPercent,
+    };
+  }, [emails, stats.total, stats.urgent]);
+
   const canShowNotifications = notificationEnabled;
   const canShowUrgentAlerts = notificationEnabled && urgentAlertEnabled;
   const hasActiveSearch = searchQuery.trim().length > 0;
@@ -453,6 +507,76 @@ export default function DashboardPage() {
             <h3><FaCheckCircle style={{ marginRight: "6px" }} />Resolved</h3>
             <p>{stats.resolved}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="viz-grid">
+        <div className="upcoming-section viz-card">
+          <h3 className="viz-title"><FaChartPie /> Category Distribution</h3>
+          {analytics.topCategories.length ? (
+            <div className="viz-bars">
+              {analytics.topCategories.map((row) => (
+                <div key={row.name} className="viz-bar-row">
+                  <div className="viz-bar-meta">
+                    <span>{row.name}</span>
+                    <span>{row.count}</span>
+                  </div>
+                  <div className="viz-bar-track">
+                    <div
+                      className="viz-bar-fill"
+                      style={{ width: `${(row.count / analytics.maxCategoryCount) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="viz-empty">No category data yet.</p>
+          )}
+        </div>
+
+        <div className="upcoming-section viz-card">
+          <h3 className="viz-title"><FaChartPie /> Urgency Split</h3>
+          <div className="urgency-ring-wrap">
+            <div
+              className="urgency-ring"
+              style={{
+                background: `conic-gradient(#dc2626 ${analytics.urgentPercent}%, #22c55e ${analytics.urgentPercent}% 100%)`
+              }}
+            >
+              <div className="urgency-ring-center">
+                <strong>{analytics.urgentPercent}%</strong>
+                <span>Urgent</span>
+              </div>
+            </div>
+            <div className="urgency-legend">
+              <div><span className="legend-dot urgent-dot" />Urgent: {stats.urgent}</div>
+              <div><span className="legend-dot normal-dot" />Normal: {Math.max(stats.total - stats.urgent, 0)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="upcoming-section viz-card viz-wide">
+          <h3 className="viz-title"><FaChartLine /> 7-Day Email Volume</h3>
+          {analytics.dayBuckets.some((d) => d.count > 0) ? (
+            <>
+              <div className="trend-svg-wrap">
+                <svg viewBox={`0 0 ${analytics.chartWidth} ${analytics.chartHeight}`} className="trend-svg" preserveAspectRatio="none">
+                  <polyline className="trend-line" points={analytics.dailyPoints} />
+                </svg>
+              </div>
+              <div className="trend-labels">
+                {analytics.dayBuckets.map((d) => (
+                  <div key={d.label} className="trend-label">
+                    <span>{d.label}</span>
+                    <strong>{d.count}</strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="viz-empty">No trend data in the last 7 days.</p>
+          )}
         </div>
       </div>
 
