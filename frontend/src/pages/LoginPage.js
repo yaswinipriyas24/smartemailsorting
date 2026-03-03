@@ -55,12 +55,18 @@ export default function LoginPage() {
       );
 
       const token = response.data.access_token;
+      const role = response.data.role || "user";
       if (!token) throw new Error("No access token received");
 
       localStorage.setItem("token", token);
+      localStorage.setItem("role", role);
       setSuccess("Login successful! Redirecting...");
 
-      // Enforce architecture: connect Gmail before allowing dashboard access
+      if (role === "admin") {
+        setTimeout(() => navigate("/admin"), 500);
+        return;
+      }
+
       const meRes = await axios.get("http://localhost:8000/auth/me", {
         headers: { Authorization: `Bearer ${token}` }
       });

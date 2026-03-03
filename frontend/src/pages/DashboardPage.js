@@ -70,7 +70,14 @@ export default function DashboardPage() {
 
   const handleUnauthorized = useCallback(() => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     setError("Session expired. Please login again.");
+    navigate("/login");
+  }, [navigate]);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
     navigate("/login");
   }, [navigate]);
 
@@ -122,6 +129,12 @@ export default function DashboardPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(meRes.data || {});
+
+      if (meRes?.data?.role === "admin") {
+        navigate("/admin");
+        return;
+      }
+
       if (!meRes?.data?.gmail_connected) {
         navigate("/connect-gmail");
         return;
@@ -295,10 +308,16 @@ export default function DashboardPage() {
   return (
     <div className="dashboard user-dashboard">
       <div className="user-header">
-        <h1 className="title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <FaInbox />
-          Email Intelligence Dashboard
-        </h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <h1 className="title" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: 0 }}>
+            <FaInbox />
+            Email Intelligence Dashboard
+          </h1>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button className="close-btn" onClick={() => navigate("/profile")}>Profile</button>
+            <button className="close-btn" onClick={handleLogout}>Logout</button>
+          </div>
+        </div>
         <p className="user-subtitle">Monitor, prioritize, and resolve your inbox with confidence.</p>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
           <span

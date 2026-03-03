@@ -1,15 +1,25 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-// Import Pages
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import ConnectGmailPage from "./pages/ConnectGmailPage";
+import AdminPage from "./pages/AdminPage";
+import ProfilePage from "./pages/ProfilePage";
 
-// 🔒 Authentication Guard: Redirects to login if no token exists
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/login" />;
+};
+
+const AdminRoute = ({ children }) => {
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role");
+
+  if (!token) return <Navigate to="/login" />;
+  if (role !== "admin") return <Navigate to="/dashboard" />;
+
+  return children;
 };
 
 function App() {
@@ -17,31 +27,10 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
-          {/* Public Route: Anyone can access the login page */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected Route: Dashboard requires a valid token */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <PrivateRoute>
-                <DashboardPage />
-              </PrivateRoute>
-            } 
-          />
-          
-          {/* Protected Route: Connect Gmail Page */}
-          <Route 
-            path="/connect-gmail" 
-            element={
-              <PrivateRoute>
-                <ConnectGmailPage />
-              </PrivateRoute>
-            } 
-          />
-
           <Route
-            path="/user"
+            path="/dashboard"
             element={
               <PrivateRoute>
                 <DashboardPage />
@@ -49,7 +38,33 @@ function App() {
             }
           />
 
-          {/* Default Redirects: Send users to login if they hit an unknown path */}
+          <Route
+            path="/connect-gmail"
+            element={
+              <PrivateRoute>
+                <ConnectGmailPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
+
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <ProfilePage />
+              </PrivateRoute>
+            }
+          />
+
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/login" />} />
         </Routes>

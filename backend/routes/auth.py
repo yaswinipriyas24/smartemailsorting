@@ -37,6 +37,12 @@ class ForgotPasswordRequest(BaseModel):
     new_password: str
     confirm_password: str
 
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
 # -------------------------------------------------
 # REGISTER
 # -------------------------------------------------
@@ -91,6 +97,12 @@ def login(
             detail="Invalid credentials, Please check your email and password."
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is deactivated. Contact an administrator."
+        )
+
     access_token = create_access_token(
         data={
             "sub": user.email,
@@ -126,6 +138,24 @@ def forgot_password(
     db.commit()
 
     return {"message": "Password reset successful. Please login."}
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match")
+
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    return {"message": "Password changed successfully"}
 
 
 # -------------------------------------------------
@@ -181,3 +211,5 @@ def gmail_callback(
     return RedirectResponse(
         url="http://localhost:3000/dashboard"
     )
+
+
