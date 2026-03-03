@@ -61,6 +61,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [fullSyncing, setFullSyncing] = useState(false);
   const [oauthConnecting, setOauthConnecting] = useState(false);
   const [user, setUser] = useState({ email: "", role: "user", gmail_connected: false });
   const [emails, setEmails] = useState([]);
@@ -139,8 +140,10 @@ export default function DashboardPage() {
       syncPreferencesFromProfile(meRes?.data);
       setNotificationEnabled(meRes?.data?.notification_enabled !== false);
       setUrgentAlertEnabled(meRes?.data?.urgent_alert_enabled !== false);
-      if (meRes?.data?.default_category_view && meRes.data.default_category_view !== filter) {
-        setFilter(meRes.data.default_category_view);
+      if (meRes?.data?.default_category_view) {
+        setFilter((prev) =>
+          prev === meRes.data.default_category_view ? prev : meRes.data.default_category_view
+        );
       }
 
       if (meRes?.data?.role === "admin") {
@@ -200,7 +203,7 @@ export default function DashboardPage() {
   }, [location.search]);
 
   const handleSync = async () => {
-    if (syncing) return;
+    if (syncing || fullSyncing) return;
     if (!token) {
       navigate("/login");
       return;
@@ -270,6 +273,66 @@ export default function DashboardPage() {
     }
   };
 
+  const handleFullSync = async () => {
+    if (syncing || fullSyncing) return;
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    const ok = window.confirm(
+      "This will clear stored emails and re-sync from Gmail to refresh status. Continue?"
+    );
+    if (!ok) return;
+
+    try {
+      setFullSyncing(true);
+      setError("");
+
+      const meRes = await axios.get("http://localhost:8000/auth/me", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const connected = !!meRes?.data?.gmail_connected;
+      setUser((prev) => ({ ...prev, ...meRes.data }));
+
+      if (!connected) {
+        setError("Gmail is not connected. Redirecting to OAuth...");
+        await startGoogleOAuth();
+        return;
+      }
+
+      await axios.post(
+        "http://localhost:8000/sync-emails?limit=200&clear_db=true",
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 600000 }
+      );
+
+      await loadDashboard();
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || "Full sync failed";
+      const normalized = String(msg).toLowerCase();
+      if (
+        normalized.includes("invalid_grant") ||
+        normalized.includes("refresh token") ||
+        normalized.includes("token has been expired or revoked") ||
+        normalized.includes("gmail oauth not connected") ||
+        normalized.includes("connect gmail")
+      ) {
+        setUser((prev) => ({ ...prev, gmail_connected: false }));
+        setError("Gmail authorization expired. Redirecting to reconnect...");
+        await startGoogleOAuth();
+        return;
+      }
+      setError(String(msg));
+    } finally {
+      setFullSyncing(false);
+    }
+  };
+
   const handleResolve = async (emailId) => {
     try {
       await axios.patch(
@@ -316,6 +379,7 @@ export default function DashboardPage() {
 
   const canShowNotifications = notificationEnabled;
   const canShowUrgentAlerts = notificationEnabled && urgentAlertEnabled;
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   if (loading) {
     return <div className="dashboard">Loading Dashboard...</div>;
@@ -324,18 +388,18 @@ export default function DashboardPage() {
   return (
     <div className="dashboard user-dashboard">
       <div className="user-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          <h1 className="title" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: 0 }}>
+        <div className="page-header-row">
+          <h1 className="title header-title">
             <FaInbox />
             Email Intelligence Dashboard
           </h1>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="header-actions">
             <button className="close-btn" onClick={() => navigate("/profile")}>Profile</button>
             <button className="close-btn" onClick={handleLogout}>Logout</button>
           </div>
         </div>
         <p className="user-subtitle">Monitor, prioritize, and resolve your inbox with confidence.</p>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
+        <div className="status-row">
           <span
             className={user.gmail_connected ? "connected" : "not-connected"}
             style={{ fontWeight: 700, color: user.gmail_connected ? "#166534" : "#b91c1c" }}
@@ -392,7 +456,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="category-overview" style={{ alignItems: "center" }}>
+      <div className="category-overview category-overview-top">
         <div className="filter-container">
           {categories.map((cat) => (
             <button
@@ -406,17 +470,10 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <div style={{ position: "relative", width: "320px" }}>
+        <div className="toolbar-actions">
+          <div className="search-wrap">
             <FaSearch
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "#64748b",
-                fontSize: "14px"
-              }}
+              className="search-icon"
             />
             <input
               type="text"
@@ -431,73 +488,96 @@ export default function DashboardPage() {
             <FaSyncAlt style={{ marginRight: "6px" }} />
             {syncing ? "Syncing..." : "Sync Emails"}
           </button>
+          <button className="close-btn" onClick={handleFullSync} disabled={syncing || fullSyncing}>
+            {fullSyncing ? "Refreshing..." : "Full Sync (Refresh Status)"}
+          </button>
         </div>
       </div>
 
       <div className="email-section">
-        <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <h2 className="section-title section-title-row">
           <FaInbox />
           Inbox
         </h2>
-        <table className="email-table">
-          <thead>
-            <tr>
-              <th>Subject</th>
-              <th>From</th>
-              <th>Category</th>
-              <th>Deadline</th>
-              <th>Urgency</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredEmails.length ? (
-              filteredEmails.map((email) => (
-                <tr key={email.id} className="user-email-row" onClick={() => setSelectedEmail(email)}>
-                  <td>{email.subject || "(No Subject)"}</td>
-                  <td>{email.sender || "Unknown sender"}</td>
-                  <td><span className="badge category">{email.category || "General"}</span></td>
-                  <td>
-                    {email.deadline_date
-                      ? new Date(email.deadline_date).toLocaleDateString()
-                      : "-"}
-                  </td>
-                  <td>
-                    {email.urgent ? (
-                      <span className="badge urgent">Urgent</span>
-                    ) : (
-                      <span className="badge normal">Normal</span>
-                    )}
-                  </td>
-                  <td>
-                    {email.is_read || email.is_resolved ? (
-                      <span className="badge normal">Resolved</span>
-                    ) : (
-                      <span className="badge urgent">Open</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      className="close-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResolve(email.id);
-                      }}
-                      disabled={email.is_read || email.is_resolved}
-                    >
-                      {email.is_read || email.is_resolved ? "Resolved" : "Mark Resolved"}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="empty">No emails found</td>
-              </tr>
+        {filteredEmails.length === 0 ? (
+          <div className="upcoming-section empty-state-panel">
+            <h3>{hasActiveSearch ? "No matching emails" : "Inbox is empty"}</h3>
+            <p>
+              {hasActiveSearch
+                ? "Try different keywords or remove filters."
+                : "Sync your mailbox to fetch and classify the latest emails."}
+            </p>
+            {!hasActiveSearch && (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button className="reply-btn" onClick={handleSync} disabled={syncing || fullSyncing}>
+                  {syncing ? "Syncing..." : "Sync Emails"}
+                </button>
+                <button className="close-btn" onClick={handleFullSync} disabled={syncing || fullSyncing}>
+                  {fullSyncing ? "Refreshing..." : "Full Sync (Refresh Status)"}
+                </button>
+              </div>
             )}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="email-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>From</th>
+                  <th>Category</th>
+                  <th>Deadline</th>
+                  <th>Urgency</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEmails.map((email) => (
+                  <tr key={email.id} className="user-email-row" onClick={() => setSelectedEmail(email)}>
+                    <td>{email.subject || "(No Subject)"}</td>
+                    <td>{email.sender || "Unknown sender"}</td>
+                    <td><span className="badge category">{email.category || "General"}</span></td>
+                    <td>
+                      {email.deadline_date
+                        ? new Date(email.deadline_date).toLocaleDateString()
+                        : "-"}
+                    </td>
+                    <td>
+                      {email.urgent ? (
+                        <span className="badge urgent">Urgent</span>
+                      ) : (
+                        <span className="badge normal">Normal</span>
+                      )}
+                    </td>
+                    <td>
+                      {email.is_read || email.is_resolved ? (
+                        <span className="badge normal">Resolved</span>
+                      ) : (
+                        <span className="badge urgent">Open</span>
+                      )}
+                    </td>
+                    <td>
+                      {email.is_read || email.is_resolved ? (
+                        <span className="empty">-</span>
+                      ) : (
+                        <button
+                          className="close-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResolve(email.id);
+                          }}
+                        >
+                          Mark Resolved
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {selectedEmail && (

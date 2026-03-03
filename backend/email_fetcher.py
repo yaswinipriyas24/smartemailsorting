@@ -241,13 +241,16 @@ def _fetch_emails_with_service(service, max_emails=100):
                     sender = h["value"]
 
             body = _extract_body(message["payload"])
+            label_ids = message.get("labelIds", []) or []
+            is_read = "UNREAD" not in label_ids
 
             emails.append({
                 "email_id": message["id"],
                 "sender": sender,
                 "subject": subject,
                 "body": body,
-                "received_at": datetime.utcnow()
+                "received_at": datetime.utcnow(),
+                "is_read": is_read,
             })
 
             if max_emails and len(emails) >= max_emails:

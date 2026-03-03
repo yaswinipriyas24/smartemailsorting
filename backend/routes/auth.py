@@ -67,7 +67,8 @@ def register(
     user_data: RegisterRequest,
     db: Session = Depends(get_db)
 ):
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    normalized_email = user_data.email.strip().lower()
+    existing_user = db.query(User).filter(User.email == normalized_email).first()
 
     if existing_user:
         raise HTTPException(
@@ -79,7 +80,7 @@ def register(
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
     new_user = User(
-        email=user_data.email,
+        email=normalized_email,
         hashed_password=hash_password(user_data.password),
         role="user"
     )
@@ -105,8 +106,9 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    normalized_email = form_data.username.strip().lower()
     user = db.query(User).filter(
-        User.email == form_data.username
+        User.email == normalized_email
     ).first()
 
     if not user or not verify_password(

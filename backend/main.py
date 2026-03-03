@@ -312,7 +312,8 @@ def connect_gmail(
 def sync_emails_endpoint(
     limit: int = 20,
     clear_db: bool = False,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if not current_user.gmail_email or not current_user.gmail_refresh_token:
         raise HTTPException(

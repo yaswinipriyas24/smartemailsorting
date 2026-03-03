@@ -28,6 +28,7 @@ def store_email(db: Session, email_data: dict):
         Email.email_id == email_data["email_id"],
         Email.user_id == user_id
     ).first()
+    incoming_is_read = bool(email_data.get("is_read", False))
 
     # -------------------------------------------------
     # 2. Deadline Intelligence
@@ -59,6 +60,8 @@ def store_email(db: Session, email_data: dict):
         existing.deadline_date = deadline_date
         existing.days_remaining = days_remaining
         existing.deadlines = ", ".join(email_data.get("deadlines", []) or [])
+        # Preserve manual resolve if already True; otherwise sync from Gmail read status.
+        existing.is_read = bool(existing.is_read) or incoming_is_read
 
         db.commit()
         db.refresh(existing)
@@ -85,7 +88,7 @@ def store_email(db: Session, email_data: dict):
 
         user_id=user_id,
 
-        is_read=False,
+        is_read=incoming_is_read,
         is_processed=True
     )
 

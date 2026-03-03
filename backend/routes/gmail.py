@@ -2,15 +2,17 @@
 
 import os
 import json
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from sqlalchemy.orm import Session
+from jose import jwt, JWTError
 
 from backend.database import get_db
 from backend.models import User
-from backend.auth_utils import get_current_user
+from backend.auth_utils import get_current_user, SECRET_KEY, ALGORITHM
 from backend.sync_emails import sync_emails
 
 
@@ -25,6 +27,23 @@ SCOPES = [
 ]
 
 REDIRECT_URI = "http://127.0.0.1:8000/gmail/callback"
+OAUTH_STATE_EXPIRE_MINUTES = 15
+
+
+def _build_oauth_state(user_id: int) -> str:
+    payload = {
+        "uid": user_id,
+        "exp": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _parse_oauth_state(state_token: str) -> int:
+    payload = jwt.decode(state_token, SECRET_KEY, algorithms=[ALGORITHM])
+    user_id = payload.get("uid")
+    if not isinstance(user_id, int):
+        raise ValueError("Invalid OAuth state payload")
+    return user_id
 
 
 # -------------------------------------------------
@@ -46,7 +65,7 @@ def connect_gmail(current_user: User = Depends(get_current_user)):
     auth_url, state = flow.authorization_url(
         access_type="offline",
         prompt="consent",
-        state=str(current_user.id),
+        state=_build_oauth_state(current_user.id),
     )
 
     return {"auth_url": auth_url}
@@ -82,7 +101,12 @@ def gmail_callback(
         print(f"   Refresh token value: {credentials.refresh_token is not None}")
 
         # Get user using state (user_id)
-        user = db.query(User).filter(User.id == int(state)).first()
+        try:
+            user_id = _parse_oauth_state(state)
+        except (JWTError, ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid user state")
+
+        user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
             raise HTTPException(

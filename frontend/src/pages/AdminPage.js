@@ -210,9 +210,9 @@ export default function AdminPage() {
   return (
     <div className="dashboard user-dashboard">
       <div className="user-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+        <div className="page-header-row">
           <h1 className="title" style={{ marginBottom: 0 }}>Admin Dashboard</h1>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="header-actions">
             <button className="close-btn" onClick={() => navigate("/profile")}>Profile</button>
             <button className="close-btn" onClick={logout}>Logout</button>
           </div>
@@ -261,58 +261,60 @@ export default function AdminPage() {
 
       <div className="email-section">
         <h2 className="section-title">Step 3: Manual Override</h2>
-        <table className="email-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Subject</th>
-              <th>Current Category</th>
-              <th>Override Category</th>
-              <th>Current Urgent</th>
-              <th>Override Urgent</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {emails.length ? (
-              emails.slice(0, 100).map((email) => {
-                const selection = getOverrideFor(email);
-                return (
-                  <tr key={email.id}>
-                    <td>{email.id}</td>
-                    <td>{email.subject || "(No Subject)"}</td>
-                    <td>{email.category || "Unknown"}</td>
-                    <td>
-                      <select
-                        className="reply-textarea"
-                        style={{ minHeight: "42px", marginTop: 0 }}
-                        value={selection.category}
-                        onChange={(e) => setOverrideField(email.id, "category", e.target.value, email)}
-                      >
-                        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </td>
-                    <td>{email.urgent ? "Yes" : "No"}</td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={!!selection.urgent}
-                        onChange={(e) => setOverrideField(email.id, "urgent", e.target.checked, email)}
-                      />
-                    </td>
-                    <td>
-                      <button className="reply-btn" onClick={() => saveOverride(email)}>Save Override</button>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
+        <div className="table-wrap">
+          <table className="email-table">
+            <thead>
               <tr>
-                <td colSpan="7" className="empty">No emails to review.</td>
+                <th>ID</th>
+                <th>Subject</th>
+                <th>Current Category</th>
+                <th>Override Category</th>
+                <th>Current Urgent</th>
+                <th>Override Urgent</th>
+                <th>Action</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {emails.length ? (
+                emails.slice(0, 100).map((email) => {
+                  const selection = getOverrideFor(email);
+                  return (
+                    <tr key={email.id}>
+                      <td>{email.id}</td>
+                      <td>{email.subject || "(No Subject)"}</td>
+                      <td>{email.category || "Unknown"}</td>
+                      <td>
+                        <select
+                          className="reply-textarea"
+                          style={{ minHeight: "42px", marginTop: 0 }}
+                          value={selection.category}
+                          onChange={(e) => setOverrideField(email.id, "category", e.target.value, email)}
+                        >
+                          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td>{email.urgent ? "Yes" : "No"}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={!!selection.urgent}
+                          onChange={(e) => setOverrideField(email.id, "urgent", e.target.checked, email)}
+                        />
+                      </td>
+                      <td>
+                        <button className="reply-btn" onClick={() => saveOverride(email)}>Save Override</button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="7" className="empty">No emails to review.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="email-section">
@@ -348,7 +350,8 @@ export default function AdminPage() {
             <button className="reply-btn" type="submit">Add User</button>
           </form>
 
-          <table className="email-table" style={{ marginTop: "14px" }}>
+          <div className="table-wrap" style={{ marginTop: "14px" }}>
+            <table className="email-table">
             <thead>
               <tr>
                 <th>Email</th>
@@ -392,7 +395,8 @@ export default function AdminPage() {
                 </tr>
               )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       </div>
     </div>

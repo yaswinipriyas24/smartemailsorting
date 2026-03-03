@@ -1,15 +1,18 @@
 import os
 import logging
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from sqlalchemy.orm import Session
+from jose import jwt, JWTError
 
 from backend.database import get_db
 from backend.models import User, UserProfile
 from backend.auth_utils import get_current_user
 from backend.sync_emails import sync_emails
+from backend.auth_utils import SECRET_KEY, ALGORITHM
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,7 @@ SCOPES = [
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
 REDIRECT_URI = f"{BACKEND_BASE_URL}/gmail/callback"
+OAUTH_STATE_EXPIRE_MINUTES = 15
 
 
 def _get_or_create_profile(db: Session, user: User) -> UserProfile:
@@ -47,6 +51,22 @@ def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     db.add(profile)
     db.flush()
     return profile
+
+
+def _build_oauth_state(user_id: int) -> str:
+    payload = {
+        "uid": user_id,
+        "exp": datetime.utcnow() + timedelta(minutes=OAUTH_STATE_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _parse_oauth_state(state_token: str) -> int:
+    payload = jwt.decode(state_token, SECRET_KEY, algorithms=[ALGORITHM])
+    user_id = payload.get("uid")
+    if not isinstance(user_id, int):
+        raise ValueError("Invalid OAuth state payload")
+    return user_id
 
 
 # -------------------------------------------------
@@ -70,7 +90,7 @@ def connect_gmail(
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
-        state=str(current_user.id),
+        state=_build_oauth_state(current_user.id),
     )
     logger.info(
         "Starting Gmail OAuth for user_id=%s, redirect_uri=%s",
@@ -106,8 +126,8 @@ def gmail_callback(
 
     # Bug 2: Validate state is a valid integer (avoid ValueError → 500)
     try:
-        user_id = int(state)
-    except (ValueError, TypeError):
+        user_id = _parse_oauth_state(state)
+    except (JWTError, ValueError, TypeError):
         raise HTTPException(
             status_code=400,
             detail="Invalid state parameter",
