@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User
+from backend.models import User, UserProfile
 from backend.auth_utils import get_current_user
 from backend.sync_emails import sync_emails
 
@@ -28,10 +28,25 @@ GOOGLE_CLIENT_SECRET_FILE = next(
 
 router = APIRouter(prefix="/gmail", tags=["Gmail"])
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
 REDIRECT_URI = f"{BACKEND_BASE_URL}/gmail/callback"
+
+
+def _get_or_create_profile(db: Session, user: User) -> UserProfile:
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if profile:
+        return profile
+    profile = UserProfile(user_id=user.id)
+    db.add(profile)
+    db.flush()
+    return profile
 
 
 # -------------------------------------------------
@@ -112,8 +127,10 @@ def gmail_callback(
         credentials = flow.credentials
 
         service = build("gmail", "v1", credentials=credentials)
-        profile = service.users().getProfile(userId="me").execute()
-        gmail_email = profile.get("emailAddress")
+        gmail_profile = service.users().getProfile(userId="me").execute()
+        gmail_email = gmail_profile.get("emailAddress")
+        oauth2_service = build("oauth2", "v2", credentials=credentials)
+        user_info = oauth2_service.userinfo().get().execute()
     except Exception:
         logger.exception("Gmail OAuth token exchange failed for user_id=%s", user_id)
         return RedirectResponse(
@@ -131,6 +148,9 @@ def gmail_callback(
     user.gmail_access_token = credentials.token or user.gmail_access_token
     user.gmail_refresh_token = refresh_token
     user.gmail_token_expiry = credentials.expiry
+    profile = _get_or_create_profile(db, user)
+    profile.full_name = user_info.get("name") or profile.full_name
+    profile.photo_url = user_info.get("picture") or profile.photo_url
     db.commit()
 
     try:

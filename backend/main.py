@@ -20,6 +20,7 @@ from backend.database import init_db, get_db
 from backend.models import (
     Email,
     User,
+    UserProfile,
     ModelCorrection,
     AdminEventLog,
     RetrainingRun,
@@ -44,6 +45,9 @@ DATASET_PATH = os.path.join(BASE_DIR, "dataset", "emails.csv")
 TFIDF_TRAIN_SCRIPT = os.path.join(BASE_DIR, "backend", "tfidf_train.py")
 
 ALLOWED_ROLES = {"user", "admin"}
+ALLOWED_THEMES = {"light", "dark"}
+ALLOWED_LANGUAGES = {"en"}
+MODEL_VERSION = os.getenv("MODEL_VERSION", "tfidf-logreg-v1")
 ALLOWED_CATEGORIES = {
     "Announcements",
     "Customer Support",
@@ -150,23 +154,116 @@ def _record_admin_event(db: Session, event_type: str, level: str, message: str) 
     )
 
 
+def _get_or_create_profile(db: Session, user: User) -> UserProfile:
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if profile:
+        return profile
+    default_name = user.email.split("@")[0].replace(".", " ").replace("_", " ").title()
+    profile = UserProfile(user_id=user.id, full_name=default_name)
+    db.add(profile)
+    db.flush()
+    return profile
+
+
 # =================================================
 # AUTH HELPER ENDPOINT
 # =================================================
 @app.get("/auth/me")
-def get_current_user_info(current_user: User = Depends(get_current_user)):
+def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     gmail_connected = bool(
         current_user.gmail_email and current_user.gmail_refresh_token
     )
+    profile = _get_or_create_profile(db, current_user)
+
+    total_emails_processed = (
+        db.query(func.count(Email.id))
+        .filter(Email.user_id == current_user.id)
+        .scalar() or 0
+    )
+    total_urgent_emails = (
+        db.query(func.count(Email.id))
+        .filter(Email.user_id == current_user.id, Email.urgent.is_(True))
+        .scalar() or 0
+    )
+
+    admin_extras = {}
+    if current_user.role == "admin":
+        total_users = db.query(func.count(User.id)).scalar() or 0
+        admin_extras = {
+            "system_access_level": "full",
+            "total_users_managed": max(int(total_users) - 1, 0),
+            "model_version_running": MODEL_VERSION,
+            "has_retraining_access": True,
+        }
+
+    db.commit()
     return {
         "id": current_user.id,
         "email": current_user.email,
         "role": current_user.role,
         "is_active": current_user.is_active,
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "full_name": profile.full_name,
+        "photo_url": profile.photo_url,
+        "last_login_at": profile.last_login_at.isoformat() if profile.last_login_at else None,
+        "last_sync_at": profile.last_sync_at.isoformat() if profile.last_sync_at else None,
+        "default_category_view": profile.default_category_view,
+        "notification_enabled": bool(profile.notification_enabled),
+        "urgent_alert_enabled": bool(profile.urgent_alert_enabled),
+        "theme": profile.theme,
+        "language": profile.language,
+        "two_factor_enabled": bool(profile.two_factor_enabled),
+        "token_expiry": current_user.gmail_token_expiry.isoformat() if current_user.gmail_token_expiry else None,
+        "total_emails_processed": int(total_emails_processed),
+        "total_urgent_emails": int(total_urgent_emails),
+        "avg_response_hours": profile.avg_response_hours,
         "gmail_email": current_user.gmail_email,
-        "gmail_connected": gmail_connected
+        "gmail_connected": gmail_connected,
+        **admin_extras,
     }
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = None
+    default_category_view: str | None = None
+    notification_enabled: bool | None = None
+    urgent_alert_enabled: bool | None = None
+    theme: str | None = None
+    language: str | None = None
+
+
+@app.patch("/profile")
+def update_profile(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = _get_or_create_profile(db, current_user)
+
+    if payload.full_name is not None:
+        profile.full_name = payload.full_name.strip() or profile.full_name
+    if payload.default_category_view is not None:
+        profile.default_category_view = payload.default_category_view.strip() or "All"
+    if payload.notification_enabled is not None:
+        profile.notification_enabled = payload.notification_enabled
+    if payload.urgent_alert_enabled is not None:
+        profile.urgent_alert_enabled = payload.urgent_alert_enabled
+    if payload.theme is not None:
+        theme = payload.theme.strip().lower()
+        if theme not in ALLOWED_THEMES:
+            raise HTTPException(status_code=400, detail="Invalid theme")
+        profile.theme = theme
+    if payload.language is not None:
+        language = payload.language.strip().lower()
+        if language not in ALLOWED_LANGUAGES:
+            raise HTTPException(status_code=400, detail="Invalid language")
+        profile.language = language
+
+    db.commit()
+    return {"message": "Profile updated successfully"}
 
 
 # =================================================
@@ -193,6 +290,10 @@ def connect_gmail(
             limit=20,
             clear_existing=False
         )
+        profile = _get_or_create_profile(db, current_user)
+        profile.last_sync_at = datetime.utcnow()
+        profile.total_syncs = int(profile.total_syncs or 0) + 1
+        db.commit()
         return {
             "message": "Gmail connected and initial sync completed!",
             "gmail_email": current_user.gmail_email,
@@ -231,6 +332,10 @@ def sync_emails_endpoint(
                 status_code=500,
                 detail=f"Sync failed: {result.get('message', 'unknown error')}"
             )
+        db_profile = _get_or_create_profile(db, current_user)
+        db_profile.last_sync_at = datetime.utcnow()
+        db_profile.total_syncs = int(db_profile.total_syncs or 0) + 1
+        db.commit()
 
         return {
             "status": "success",

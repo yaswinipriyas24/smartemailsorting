@@ -90,6 +90,41 @@ class User(Base):
         "ModelCorrection",
         back_populates="corrected_by_user"
     )
+    profile = relationship(
+        "UserProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+# -------------------------------------------------
+# User Profile / Preferences / Activity
+# -------------------------------------------------
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+
+    full_name = Column(String(120), nullable=True)
+    photo_url = Column(Text, nullable=True)
+
+    last_login_at = Column(DateTime, nullable=True, index=True)
+    last_sync_at = Column(DateTime, nullable=True, index=True)
+    last_logout_all_at = Column(DateTime, nullable=True, index=True)
+
+    default_category_view = Column(String(50), default="All")
+    notification_enabled = Column(Boolean, default=True)
+    urgent_alert_enabled = Column(Boolean, default=True)
+    theme = Column(String(20), default="light")
+    language = Column(String(30), default="en")
+    two_factor_enabled = Column(Boolean, default=False)
+
+    total_syncs = Column(Integer, default=0)
+    avg_response_hours = Column(Float, nullable=True)
+
+    user = relationship("User", back_populates="profile")
 
 
 # -------------------------------------------------

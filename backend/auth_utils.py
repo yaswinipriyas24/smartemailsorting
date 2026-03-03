@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import os
 
 from backend.database import get_db
-from backend.models import User
+from backend.models import User, UserProfile
 
 
 # -------------------------------------------------
@@ -41,8 +41,9 @@ def verify_password(plain_password: str, hashed_password: str):
 
 def create_access_token(data: dict):
     to_encode = data.copy()
+    issued_at = datetime.utcnow()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "iat": int(issued_at.timestamp())})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -63,6 +64,7 @@ def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        token_iat = payload.get("iat")
 
         if email is None:
             raise credentials_exception
@@ -74,6 +76,13 @@ def get_current_user(
 
     if user is None:
         raise credentials_exception
+
+    # Global logout invalidation support for all active sessions.
+    if token_iat:
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+        if profile and profile.last_logout_all_at:
+            if datetime.utcfromtimestamp(token_iat) <= profile.last_logout_all_at:
+                raise credentials_exception
 
     return user
 

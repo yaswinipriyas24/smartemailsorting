@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
+import { getStoredPreferences, syncPreferencesFromProfile } from "../utils/userPreferences";
 
 const API_BASE = "http://localhost:8000";
 
@@ -37,6 +38,9 @@ export default function AdminPage() {
   const [overrides, setOverrides] = useState({});
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [notificationEnabled, setNotificationEnabled] = useState(
+    getStoredPreferences().notificationEnabled
+  );
 
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -65,6 +69,8 @@ export default function AdminPage() {
         navigate("/dashboard");
         return;
       }
+      syncPreferencesFromProfile(meRes?.data);
+      setNotificationEnabled(meRes?.data?.notification_enabled !== false);
       localStorage.setItem("role", "admin");
 
       const [monitoringRes, emailsRes, usersRes] = await Promise.all([
@@ -214,8 +220,8 @@ export default function AdminPage() {
         <p className="user-subtitle">Monitor model health, correct classifications, retrain, and manage users.</p>
       </div>
 
-      {error && <div className="user-error" style={{ padding: "10px", marginBottom: "14px" }}>{error}</div>}
-      {success && <div className="insight-banner" style={{ marginBottom: "14px" }}>{success}</div>}
+      {error && notificationEnabled && <div className="user-error" style={{ padding: "10px", marginBottom: "14px" }}>{error}</div>}
+      {success && notificationEnabled && <div className="insight-banner" style={{ marginBottom: "14px" }}>{success}</div>}
 
       <div className="card-container">
         <div className="card"><div><h3>Classification Accuracy</h3><p>{monitoring?.classification_accuracy ?? 0}%</p></div></div>

@@ -5,9 +5,10 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from datetime import datetime
 
 from backend.database import get_db
-from backend.models import User
+from backend.models import User, UserProfile
 from backend.auth_utils import (
     hash_password,
     verify_password,
@@ -43,6 +44,21 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
     confirm_password: str
 
+
+def _get_or_create_profile(db: Session, user: User) -> UserProfile:
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    if profile:
+        return profile
+
+    derived_name = user.email.split("@")[0].replace(".", " ").replace("_", " ").title()
+    profile = UserProfile(
+        user_id=user.id,
+        full_name=derived_name,
+    )
+    db.add(profile)
+    db.flush()
+    return profile
+
 # -------------------------------------------------
 # REGISTER
 # -------------------------------------------------
@@ -71,6 +87,11 @@ def register(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    profile = _get_or_create_profile(db, new_user)
+    if not profile.full_name and user_data.username:
+        profile.full_name = user_data.username
+    db.commit()
 
     return {"message": "User registered successfully"}
 
@@ -102,6 +123,10 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account is deactivated. Contact an administrator."
         )
+
+    profile = _get_or_create_profile(db, user)
+    profile.last_login_at = datetime.utcnow()
+    db.commit()
 
     access_token = create_access_token(
         data={
@@ -156,6 +181,17 @@ def change_password(
     db.commit()
 
     return {"message": "Password changed successfully"}
+
+
+@router.post("/logout-all-devices")
+def logout_all_devices(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = _get_or_create_profile(db, current_user)
+    profile.last_logout_all_at = datetime.utcnow()
+    db.commit()
+    return {"message": "All active sessions have been logged out"}
 
 
 # -------------------------------------------------

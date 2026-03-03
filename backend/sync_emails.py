@@ -5,7 +5,8 @@ from backend.database import SessionLocal
 from backend.email_fetcher import fetch_emails_for_user
 from backend.ml_model import classify_email
 from backend.store_email import store_email
-from backend.models import Email
+from backend.models import Email, UserProfile
+from datetime import datetime
 import logging
 
 # Configure logging
@@ -63,6 +64,27 @@ def sync_emails(user_id: int, limit: int = 50, clear_db: bool = False):
             except Exception as e:
                 logging.error(f"Skipped email: {str(e)}")
                 continue
+
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        if not profile:
+            profile = UserProfile(user_id=user_id)
+            db.add(profile)
+
+        profile.last_sync_at = datetime.utcnow()
+        profile.total_syncs = int(profile.total_syncs or 0) + 1
+
+        resolved_with_dates = [
+            e for e in db.query(Email).filter(Email.user_id == user_id).all()
+            if e.is_read and e.received_at and e.created_at
+        ]
+        if resolved_with_dates:
+            total_hours = sum(
+                (e.created_at - e.received_at).total_seconds() / 3600.0
+                for e in resolved_with_dates
+            )
+            profile.avg_response_hours = round(total_hours / len(resolved_with_dates), 2)
+
+        db.commit()
 
         return {
             "status": "success",

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage";
@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ConnectGmailPage from "./pages/ConnectGmailPage";
 import AdminPage from "./pages/AdminPage";
 import ProfilePage from "./pages/ProfilePage";
+import { applyTheme, getStoredPreferences } from "./utils/userPreferences";
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
@@ -23,6 +24,11 @@ const AdminRoute = ({ children }) => {
 };
 
 function App() {
+  useEffect(() => {
+    const prefs = getStoredPreferences();
+    applyTheme(prefs.theme);
+  }, []);
+
   return (
     <Router>
       <div className="App">

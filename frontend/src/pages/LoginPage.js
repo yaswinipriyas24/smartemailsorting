@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/auth.css";
+import { syncPreferencesFromProfile } from "../utils/userPreferences";
 
 export default function LoginPage() {
   const [view, setView] = useState("login");
@@ -62,17 +63,18 @@ export default function LoginPage() {
       localStorage.setItem("role", role);
       setSuccess("Login successful! Redirecting...");
 
-      if (role === "admin") {
-        setTimeout(() => navigate("/admin"), 500);
-        return;
-      }
-
       const meRes = await axios.get("http://localhost:8000/auth/me", {
         headers: { Authorization: `Bearer ${token}` }
       });
+      syncPreferencesFromProfile(meRes?.data);
+      localStorage.setItem("role", meRes?.data?.role || role);
       const gmailConnected = !!meRes?.data?.gmail_connected;
 
-      setTimeout(() => navigate(gmailConnected ? "/dashboard" : "/connect-gmail"), 800);
+      if ((meRes?.data?.role || role) === "admin") {
+        setTimeout(() => navigate("/admin"), 500);
+      } else {
+        setTimeout(() => navigate(gmailConnected ? "/dashboard" : "/connect-gmail"), 800);
+      }
     } catch (err) {
       let errorMsg = err.response
         ? formatError(err.response.data.detail, "Invalid credentials")

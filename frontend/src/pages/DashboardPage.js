@@ -11,6 +11,7 @@ import {
   FaInbox
 } from "react-icons/fa";
 import "../styles/dashboard.css";
+import { getStoredPreferences, syncPreferencesFromProfile } from "../utils/userPreferences";
 
 const ALL_CATEGORIES = [
   "Announcements",
@@ -67,6 +68,12 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [error, setError] = useState("");
+  const [notificationEnabled, setNotificationEnabled] = useState(
+    getStoredPreferences().notificationEnabled
+  );
+  const [urgentAlertEnabled, setUrgentAlertEnabled] = useState(
+    getStoredPreferences().urgentAlertEnabled
+  );
 
   const handleUnauthorized = useCallback(() => {
     localStorage.removeItem("token");
@@ -129,6 +136,12 @@ export default function DashboardPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(meRes.data || {});
+      syncPreferencesFromProfile(meRes?.data);
+      setNotificationEnabled(meRes?.data?.notification_enabled !== false);
+      setUrgentAlertEnabled(meRes?.data?.urgent_alert_enabled !== false);
+      if (meRes?.data?.default_category_view && meRes.data.default_category_view !== filter) {
+        setFilter(meRes.data.default_category_view);
+      }
 
       if (meRes?.data?.role === "admin") {
         navigate("/admin");
@@ -301,6 +314,9 @@ export default function DashboardPage() {
     return { total, urgent, resolved };
   }, [emails]);
 
+  const canShowNotifications = notificationEnabled;
+  const canShowUrgentAlerts = notificationEnabled && urgentAlertEnabled;
+
   if (loading) {
     return <div className="dashboard">Loading Dashboard...</div>;
   }
@@ -341,11 +357,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {error && <div className="user-error" style={{ padding: "10px", marginBottom: "16px" }}>{error}</div>}
+      {error && canShowNotifications && <div className="user-error" style={{ padding: "10px", marginBottom: "16px" }}>{error}</div>}
 
-      {!user.gmail_connected && (
+      {!user.gmail_connected && canShowNotifications && (
         <div className="insight-banner">
           Gmail OAuth not connected.
+        </div>
+      )}
+
+      {canShowUrgentAlerts && stats.urgent > 0 && (
+        <div className="insight-banner" style={{ marginBottom: "16px" }}>
+          You have {stats.urgent} urgent emails that need attention.
         </div>
       )}
 
