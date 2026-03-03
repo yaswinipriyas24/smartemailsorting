@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import ConnectGmailPage from "./pages/ConnectGmailPage";
+import UserPage from "./pages/UserPage";
 
 // 🔒 Authentication Guard: Redirects to login if no token exists
 const PrivateRoute = ({ children }) => {
@@ -38,6 +39,15 @@ function App() {
                 <ConnectGmailPage />
               </PrivateRoute>
             } 
+          />
+
+          <Route
+            path="/user"
+            element={
+              <PrivateRoute>
+                <UserPage />
+              </PrivateRoute>
+            }
           />
 
           {/* Default Redirects: Send users to login if they hit an unknown path */}
