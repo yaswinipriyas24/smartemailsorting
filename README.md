@@ -276,8 +276,8 @@ This system improves by:
 [X] Deadline Detection Complete <br>
 [X] Gmail OAuth Integrated <br>
 [ ] profile page <br>
-[ ] Register Page <br>
-[ ] Admin Interface <br>
+[X] Register Page <br>
+[X] Admin Interface <br>
 [ ] User Interface <br>
 [ ] Multi-user Architecture Stable <br>
 [ ] Dashboard Visualization Implemented <br>
