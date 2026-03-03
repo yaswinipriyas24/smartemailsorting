@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import ConnectGmailPage from "./pages/ConnectGmailPage";
 import AdminPage from "./pages/AdminPage";
 import ProfilePage from "./pages/ProfilePage";
+import LandingPage from "./pages/LandingPage";
 import { applyTheme, getStoredPreferences } from "./utils/userPreferences";
 
 const PrivateRoute = ({ children }) => {
@@ -33,6 +34,7 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
 
           <Route
@@ -71,8 +73,7 @@ function App() {
             }
           />
 
-          <Route path="/" element={<Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<LandingPage />} />
         </Routes>
       </div>
     </Router>

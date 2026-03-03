@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../styles/auth.css";
 import { syncPreferencesFromProfile } from "../utils/userPreferences";
 
@@ -15,6 +15,25 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    if (mode === "register") {
+      setView("register");
+      setError("");
+      setSuccess("");
+      return;
+    }
+    if (mode === "forgot") {
+      setView("forgot");
+      setError("");
+      setSuccess("");
+      return;
+    }
+    setView("login");
+  }, [location.search]);
 
   const resetForm = (newView) => {
     setView(newView);
