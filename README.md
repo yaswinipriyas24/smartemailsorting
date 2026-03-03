@@ -275,12 +275,12 @@ This system improves by:
 [X] ML Classification Complete <br>
 [X] Deadline Detection Complete <br>
 [X] Gmail OAuth Integrated <br>
-[ ] profile page <br>
+[X] profile page <br>
 [X] Register Page <br>
 [X] Admin Interface <br>
-[ ] User Interface <br>
-[ ] Multi-user Architecture Stable <br>
-[ ] Dashboard Visualization Implemented <br>
+[X] User Interface <br>
+[X] Multi-user Architecture Stable <br>
+[X] Dashboard Visualization Implemented <br>
 [ ] Review Ready
 
 
