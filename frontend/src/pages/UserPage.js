@@ -110,10 +110,13 @@ function UserPage() {
   };
 
   return (
-    <div className="dashboard">
-      <h1 className="title">Smart Email Intelligence Dashboard</h1>
+    <div className="dashboard user-dashboard">
+      <div className="user-header">
+        <h1 className="title">Smart Email Intelligence Dashboard</h1>
+        <p className="user-subtitle">Track categories, open messages, and draft quick replies.</p>
+      </div>
 
-      {error && <p className="error" style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error user-error">{error}</p>}
 
       {urgentCount > 0 && (
         <div className="insight-banner">
@@ -176,12 +179,12 @@ function UserPage() {
               filteredEmails.map((email) => (
                 <tr
                   key={email.id}
-                  style={{ cursor: "pointer" }}
+                  className="user-email-row"
                   onClick={() => openEmail(email)}
                 >
                   <td
                     className="subject"
-                    style={{ fontWeight: email.is_read ? "normal" : "600" }}
+                    style={{ fontWeight: email.is_read ? "500" : "700" }}
                   >
                     {email.subject}
                   </td>
@@ -232,13 +235,13 @@ function UserPage() {
               placeholder="Type your reply..."
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              style={{ width: "100%", height: "100px", marginTop: "15px" }}
+              className="reply-textarea"
             />
 
-            <div style={{ marginTop: "10px" }}>
-              <button onClick={handleReply}>Send Reply</button>
+            <div className="modal-actions">
+              <button className="reply-btn" onClick={handleReply}>Send Reply</button>
 
-              <button onClick={() => setSelectedEmail(null)} style={{ marginLeft: "10px" }}>
+              <button className="close-btn" onClick={() => setSelectedEmail(null)}>
                 Close
               </button>
             </div>

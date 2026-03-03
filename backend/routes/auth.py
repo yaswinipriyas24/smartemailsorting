@@ -29,7 +29,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     confirm_password: str
-    username: str | None = None
+    username: str | None = None             
 
 # -------------------------------------------------
 # REGISTER

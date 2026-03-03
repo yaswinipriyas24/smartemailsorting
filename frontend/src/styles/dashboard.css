@@ -21,6 +21,26 @@ body {
   letter-spacing: 0.5px;
 }
 
+.user-dashboard {
+  max-width: 1380px;
+}
+
+.user-header {
+  margin-bottom: 24px;
+}
+
+.user-subtitle {
+  margin: -20px 0 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.user-error {
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fee2e2;
+}
+
 /* ================= INSIGHT BANNER ================= */
 .insight-banner {
   background: linear-gradient(90deg, #fff3cd, #fde68a);
@@ -121,6 +141,43 @@ body {
   font-weight: 700;
 }
 
+.category-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filter-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 9px 15px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.filter-btn:hover {
+  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.filter-btn.active {
+  background: linear-gradient(120deg, #0f766e, #0e7490);
+  color: #ffffff;
+  border-color: transparent;
+}
+
 /* ================= UPCOMING DEADLINES SECTION ================= */
 .upcoming-section {
   background: white;
@@ -194,6 +251,10 @@ body {
 
 .email-table tr:hover {
   background-color: #f9fbff;
+}
+
+.user-email-row {
+  cursor: pointer;
 }
 
 /* Highlight urgent row */
@@ -322,6 +383,50 @@ body {
   font-size: 14px;
 }
 
+.reply-textarea {
+  width: 100%;
+  min-height: 120px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  box-sizing: border-box;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.reply-textarea:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
+.modal-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+}
+
+.reply-btn,
+.close-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reply-btn {
+  color: #ffffff;
+  background: linear-gradient(120deg, #0f766e, #0e7490);
+}
+
+.close-btn {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
 /* ================= ANIMATIONS ================= */
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -353,5 +458,9 @@ body {
 
   .email-table {
     font-size: 13px;
+  }
+
+  .category-overview {
+    grid-template-columns: 1fr;
   }
 }
