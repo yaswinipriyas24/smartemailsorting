@@ -71,6 +71,12 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [error, setError] = useState("");
+  const [deadlineAlerts, setDeadlineAlerts] = useState({
+    count: 0,
+    overdue_count: 0,
+    due_soon_count: 0,
+    data: []
+  });
   const [notificationEnabled, setNotificationEnabled] = useState(
     getStoredPreferences().notificationEnabled
   );
@@ -90,6 +96,28 @@ export default function DashboardPage() {
     localStorage.removeItem("role");
     navigate("/login");
   }, [navigate]);
+
+  const handleTestNotification = useCallback(async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setError("This browser does not support notifications.");
+      return;
+    }
+
+    let permission = Notification.permission;
+    if (permission !== "granted") {
+      permission = await Notification.requestPermission();
+    }
+
+    if (permission !== "granted") {
+      setError("Notification permission denied. Enable browser notifications to test.");
+      return;
+    }
+
+    new Notification("Sample Deadline Reminder", {
+      body: "Demo: A deadline is approaching. Please review and resolve urgent emails."
+    });
+    setError("");
+  }, []);
 
   const startGoogleOAuth = useCallback(async () => {
     const freshToken = localStorage.getItem("token");
@@ -159,13 +187,25 @@ export default function DashboardPage() {
       }
 
       try {
-        const emailsRes = await axios.get("http://localhost:8000/emails?limit=150", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const [emailsRes, deadlineRes] = await Promise.all([
+          axios.get("http://localhost:8000/emails?limit=150", {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get("http://localhost:8000/notifications/deadlines?lookahead_hours=24", {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
         setEmails(Array.isArray(emailsRes?.data?.data) ? emailsRes.data.data : []);
+        setDeadlineAlerts({
+          count: Number(deadlineRes?.data?.count || 0),
+          overdue_count: Number(deadlineRes?.data?.overdue_count || 0),
+          due_soon_count: Number(deadlineRes?.data?.due_soon_count || 0),
+          data: Array.isArray(deadlineRes?.data?.data) ? deadlineRes.data.data : []
+        });
       } catch (emailErr) {
         console.error("Emails load failed:", emailErr);
         setEmails([]);
+        setDeadlineAlerts({ count: 0, overdue_count: 0, due_soon_count: 0, data: [] });
         setError("Connected, but failed to load emails.");
       }
     } catch (err) {
@@ -203,6 +243,39 @@ export default function DashboardPage() {
     };
     setError(map[oauthError] || `OAuth error: ${oauthError}`);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!notificationEnabled) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [notificationEnabled]);
+
+  useEffect(() => {
+    if (!notificationEnabled) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const reminderKey = `deadline-notify-${todayKey}`;
+    if (localStorage.getItem(reminderKey)) return;
+
+    if (deadlineAlerts.overdue_count > 0) {
+      new Notification("Deadline Alert", {
+        body: `${deadlineAlerts.overdue_count} deadline(s) are over. Resolve now.`
+      });
+      localStorage.setItem(reminderKey, "1");
+      return;
+    }
+
+    if (deadlineAlerts.due_soon_count > 0) {
+      new Notification("Upcoming Deadline", {
+        body: `${deadlineAlerts.due_soon_count} email(s) have deadline within 24 hours.`
+      });
+      localStorage.setItem(reminderKey, "1");
+    }
+  }, [deadlineAlerts.overdue_count, deadlineAlerts.due_soon_count, notificationEnabled]);
 
   const handleSync = async () => {
     if (syncing || fullSyncing) return;
@@ -448,6 +521,7 @@ export default function DashboardPage() {
             Email Intelligence Dashboard
           </h1>
           <div className="header-actions">
+            <button className="reply-btn" onClick={handleTestNotification}>Test Notification</button>
             <button className="close-btn" onClick={() => navigate("/profile")}>Profile</button>
             <button className="close-btn" onClick={handleLogout}>Logout</button>
           </div>
@@ -486,6 +560,19 @@ export default function DashboardPage() {
       {canShowUrgentAlerts && stats.urgent > 0 && (
         <div className="insight-banner" style={{ marginBottom: "16px" }}>
           You have {stats.urgent} urgent emails that need attention.
+        </div>
+      )}
+
+      {canShowNotifications && deadlineAlerts.overdue_count > 0 && (
+        <div className="insight-banner" style={{ marginBottom: "12px", borderLeftColor: "#dc2626", color: "#fecaca" }}>
+          {deadlineAlerts.overdue_count} deadline{deadlineAlerts.overdue_count > 1 ? "s are" : " is"} over.
+          Please resolve immediately.
+        </div>
+      )}
+
+      {canShowNotifications && deadlineAlerts.due_soon_count > 0 && (
+        <div className="insight-banner" style={{ marginBottom: "16px" }}>
+          {deadlineAlerts.due_soon_count} email{deadlineAlerts.due_soon_count > 1 ? "s have" : " has"} deadline within 24 hours.
         </div>
       )}
 

@@ -6,7 +6,7 @@ import csv
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -163,6 +163,52 @@ def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     db.add(profile)
     db.flush()
     return profile
+
+
+def _build_deadline_notifications(db: Session, user: User, lookahead_hours: int = 24):
+    now = datetime.utcnow()
+    soon_cutoff = now + timedelta(hours=max(int(lookahead_hours), 1))
+
+    rows = (
+        db.query(Email)
+        .filter(
+            Email.user_id == user.id,
+            Email.deadline_date.isnot(None),
+            Email.is_read.is_(False),
+        )
+        .order_by(Email.deadline_date.asc())
+        .all()
+    )
+
+    notifications = []
+    for email in rows:
+        if not email.deadline_date:
+            continue
+
+        if email.deadline_date <= now:
+            notifications.append(
+                {
+                    "email_id": email.id,
+                    "subject": email.subject or "(No Subject)",
+                    "deadline_date": email.deadline_date.isoformat(),
+                    "type": "overdue",
+                    "message": "Deadline reached. Take action now.",
+                }
+            )
+            continue
+
+        if email.deadline_date <= soon_cutoff:
+            notifications.append(
+                {
+                    "email_id": email.id,
+                    "subject": email.subject or "(No Subject)",
+                    "deadline_date": email.deadline_date.isoformat(),
+                    "type": "due_soon",
+                    "message": "Deadline approaching soon.",
+                }
+            )
+
+    return notifications
 
 
 # =================================================
@@ -482,6 +528,25 @@ def get_upcoming_deadlines(
             }
             for e in emails
         ]
+    }
+
+
+@app.get("/notifications/deadlines")
+def get_deadline_notifications(
+    lookahead_hours: int = 24,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    notifications = _build_deadline_notifications(db, current_user, lookahead_hours=lookahead_hours)
+
+    overdue_count = sum(1 for n in notifications if n["type"] == "overdue")
+    due_soon_count = sum(1 for n in notifications if n["type"] == "due_soon")
+
+    return {
+        "count": len(notifications),
+        "overdue_count": overdue_count,
+        "due_soon_count": due_soon_count,
+        "data": notifications,
     }
 
 
