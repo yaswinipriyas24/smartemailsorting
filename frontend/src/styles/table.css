@@ -1,9 +1,10 @@
 .table-container {
   margin-top: 40px;
-  background: white;
+  background: #1e293b;
   padding: 25px;
   border-radius: 12px;
-  box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+  color: #f8fafc;
 }
 
 .table-container h2 {
@@ -18,30 +19,32 @@ table {
 th {
   text-align: left;
   padding: 12px;
-  background-color: #f1f5f9;
+  background-color: #0f172a;
+  color: #e2e8f0;
   font-weight: 600;
 }
 
 td {
   padding: 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #334155;
+  color: #cbd5e1;
 }
 
 tr:hover {
-  background-color: #f9fafb;
+  background-color: #334155;
 }
 
 .urgent {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;
 }
 
 .normal {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 12px;

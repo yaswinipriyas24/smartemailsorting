@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  FaBullhorn,
+  FaCalendarAlt,
+  FaClipboardList,
+  FaCreditCard,
   FaSearch,
   FaEnvelope,
   FaExclamationTriangle,
@@ -11,9 +15,21 @@ import {
   FaInbox,
   FaChartPie,
   FaChartLine,
+  FaGavel,
+  FaHeadset,
+  FaLaptopCode,
+  FaShoppingCart,
+  FaTools,
+  FaUsers,
 } from "react-icons/fa";
 import "../styles/dashboard.css";
-import { getStoredPreferences, syncPreferencesFromProfile } from "../utils/userPreferences";
+import {
+  getStoredPreferences,
+  setReminderWindowHours,
+  syncPreferencesFromProfile
+} from "../utils/userPreferences";
+import { clearSession, getAuthToken } from "../utils/authSession";
+import { apiUrl } from "../utils/api";
 
 const ALL_CATEGORIES = [
   "Announcements",
@@ -36,30 +52,30 @@ const ALL_CATEGORIES = [
 ];
 
 const CATEGORY_ICONS = {
-  Announcements: "📢",
-  "Customer Support": "🎧",
-  Deadlines: "⏰",
-  "General Communication": "💬",
-  "Human Resources": "👥",
-  Invoices: "🧾",
-  Legal: "⚖️",
-  Marketing: "📈",
-  Meetings: "📅",
-  Orders: "📦",
-  Payments: "💳",
-  "Performance Reports": "📊",
-  "Project Updates": "🛠️",
-  Recruitment: "🧑‍💼",
-  Reminders: "🔔",
-  "Technical Issues": "🧰",
-  Training: "🎓",
-  All: "✨"
+  Announcements: FaBullhorn,
+  "Customer Support": FaHeadset,
+  Deadlines: FaCalendarAlt,
+  "General Communication": FaUsers,
+  "Human Resources": FaUsers,
+  Invoices: FaClipboardList,
+  Legal: FaGavel,
+  Marketing: FaChartLine,
+  Meetings: FaCalendarAlt,
+  Orders: FaShoppingCart,
+  Payments: FaCreditCard,
+  "Performance Reports": FaChartLine,
+  "Project Updates": FaTools,
+  Recruitment: FaUsers,
+  Reminders: FaCalendarAlt,
+  "Technical Issues": FaLaptopCode,
+  Training: FaClipboardList,
+  All: FaInbox
 };
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem("token");
+  
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -83,17 +99,18 @@ export default function DashboardPage() {
   const [urgentAlertEnabled, setUrgentAlertEnabled] = useState(
     getStoredPreferences().urgentAlertEnabled
   );
+  const [reminderWindowHours, setReminderWindow] = useState(
+    getStoredPreferences().reminderWindowHours || 24
+  );
 
   const handleUnauthorized = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    clearSession();
     setError("Session expired. Please login again.");
     navigate("/login");
   }, [navigate]);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    clearSession();
     navigate("/login");
   }, [navigate]);
 
@@ -120,7 +137,7 @@ export default function DashboardPage() {
   }, []);
 
   const startGoogleOAuth = useCallback(async () => {
-    const freshToken = localStorage.getItem("token");
+    const freshToken = getAuthToken();
     if (!freshToken) {
       navigate("/login");
       return;
@@ -129,7 +146,7 @@ export default function DashboardPage() {
     try {
       setOauthConnecting(true);
       setError("");
-      const response = await axios.get("http://localhost:8000/gmail/connect", {
+      const response = await axios.get(apiUrl("/gmail/connect"), {
         headers: { Authorization: `Bearer ${freshToken}` }
       });
       const authUrl = response?.data?.auth_url;
@@ -153,7 +170,21 @@ export default function DashboardPage() {
     }
   }, [navigate, handleUnauthorized]);
 
+  const fetchDeadlineAlerts = useCallback(async (activeToken, hours) => {
+    const deadlineRes = await axios.get(
+      apiUrl(`/notifications/deadlines?lookahead_hours=${hours}`),
+      { headers: { Authorization: `Bearer ${activeToken}` } }
+    );
+    setDeadlineAlerts({
+      count: Number(deadlineRes?.data?.count || 0),
+      overdue_count: Number(deadlineRes?.data?.overdue_count || 0),
+      due_soon_count: Number(deadlineRes?.data?.due_soon_count || 0),
+      data: Array.isArray(deadlineRes?.data?.data) ? deadlineRes.data.data : []
+    });
+  }, []);
+
   const loadDashboard = useCallback(async () => {
+    const token = getAuthToken();
     if (!token) {
       navigate("/login");
       return;
@@ -163,13 +194,18 @@ export default function DashboardPage() {
       setLoading(true);
       setError("");
 
-      const meRes = await axios.get("http://localhost:8000/auth/me", {
+      const meRes = await axios.get(apiUrl("/auth/me"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(meRes.data || {});
       syncPreferencesFromProfile(meRes?.data);
       setNotificationEnabled(meRes?.data?.notification_enabled !== false);
       setUrgentAlertEnabled(meRes?.data?.urgent_alert_enabled !== false);
+      const reminderHours = Number(
+        meRes?.data?.reminder_window_hours || getStoredPreferences().reminderWindowHours || 24
+      );
+      setReminderWindow(reminderHours);
+      setReminderWindowHours(reminderHours);
       if (meRes?.data?.default_category_view) {
         setFilter((prev) =>
           prev === meRes.data.default_category_view ? prev : meRes.data.default_category_view
@@ -187,21 +223,13 @@ export default function DashboardPage() {
       }
 
       try {
-        const [emailsRes, deadlineRes] = await Promise.all([
-          axios.get("http://localhost:8000/emails?limit=150", {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          axios.get("http://localhost:8000/notifications/deadlines?lookahead_hours=24", {
+        const [emailsRes] = await Promise.all([
+          axios.get(apiUrl("/emails?limit=150"), {
             headers: { Authorization: `Bearer ${token}` }
           })
         ]);
         setEmails(Array.isArray(emailsRes?.data?.data) ? emailsRes.data.data : []);
-        setDeadlineAlerts({
-          count: Number(deadlineRes?.data?.count || 0),
-          overdue_count: Number(deadlineRes?.data?.overdue_count || 0),
-          due_soon_count: Number(deadlineRes?.data?.due_soon_count || 0),
-          data: Array.isArray(deadlineRes?.data?.data) ? deadlineRes.data.data : []
-        });
+        await fetchDeadlineAlerts(token, reminderHours);
       } catch (emailErr) {
         console.error("Emails load failed:", emailErr);
         setEmails([]);
@@ -223,7 +251,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, navigate, handleUnauthorized]);
+  }, [navigate, handleUnauthorized, fetchDeadlineAlerts]);
 
   useEffect(() => {
     loadDashboard();
@@ -271,14 +299,24 @@ export default function DashboardPage() {
 
     if (deadlineAlerts.due_soon_count > 0) {
       new Notification("Upcoming Deadline", {
-        body: `${deadlineAlerts.due_soon_count} email(s) have deadline within 24 hours.`
+        body: `${deadlineAlerts.due_soon_count} email(s) have deadline within ${reminderWindowHours} hours.`
       });
       localStorage.setItem(reminderKey, "1");
     }
-  }, [deadlineAlerts.overdue_count, deadlineAlerts.due_soon_count, notificationEnabled]);
+  }, [deadlineAlerts.overdue_count, deadlineAlerts.due_soon_count, notificationEnabled, reminderWindowHours]);
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token || !notificationEnabled) return undefined;
+    const interval = window.setInterval(() => {
+      fetchDeadlineAlerts(token, reminderWindowHours).catch(() => {});
+    }, 180000);
+    return () => window.clearInterval(interval);
+  }, [notificationEnabled, reminderWindowHours, fetchDeadlineAlerts]);
 
   const handleSync = async () => {
     if (syncing || fullSyncing) return;
+    const token = getAuthToken();
     if (!token) {
       navigate("/login");
       return;
@@ -289,7 +327,7 @@ export default function DashboardPage() {
       setError("");
 
       // Always re-check on click to avoid stale frontend state.
-      const meRes = await axios.get("http://localhost:8000/auth/me", {
+      const meRes = await axios.get(apiUrl("/auth/me"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       const connected = !!meRes?.data?.gmail_connected;
@@ -302,7 +340,7 @@ export default function DashboardPage() {
       }
 
       const syncRes = await axios.post(
-        "http://localhost:8000/sync-emails?limit=20",
+        apiUrl("/sync-emails?limit=20"),
         {},
         { headers: { Authorization: `Bearer ${token}` }, timeout: 300000 }
       );
@@ -350,6 +388,7 @@ export default function DashboardPage() {
 
   const handleFullSync = async () => {
     if (syncing || fullSyncing) return;
+    const token = getAuthToken();
     if (!token) {
       navigate("/login");
       return;
@@ -364,7 +403,7 @@ export default function DashboardPage() {
       setFullSyncing(true);
       setError("");
 
-      const meRes = await axios.get("http://localhost:8000/auth/me", {
+      const meRes = await axios.get(apiUrl("/auth/me"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       const connected = !!meRes?.data?.gmail_connected;
@@ -377,7 +416,7 @@ export default function DashboardPage() {
       }
 
       await axios.post(
-        "http://localhost:8000/sync-emails?limit=200&clear_db=true",
+        apiUrl("/sync-emails?limit=200&clear_db=true"),
         {},
         { headers: { Authorization: `Bearer ${token}` }, timeout: 600000 }
       );
@@ -409,9 +448,14 @@ export default function DashboardPage() {
   };
 
   const handleResolve = async (emailId) => {
+    const token = getAuthToken();
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
     try {
       await axios.patch(
-        `http://localhost:8000/emails/${emailId}/resolve`,
+        apiUrl(`/emails/${emailId}/resolve`),
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -530,7 +574,6 @@ export default function DashboardPage() {
         <div className="status-row">
           <span
             className={user.gmail_connected ? "connected" : "not-connected"}
-            style={{ fontWeight: 700, color: user.gmail_connected ? "#166534" : "#b91c1c" }}
           >
             <FaLink style={{ marginRight: "6px" }} />
             {user.gmail_connected ? "Gmail Connected" : "Gmail Not Connected"}
@@ -564,7 +607,7 @@ export default function DashboardPage() {
       )}
 
       {canShowNotifications && deadlineAlerts.overdue_count > 0 && (
-        <div className="insight-banner" style={{ marginBottom: "12px", borderLeftColor: "#dc2626", color: "#fecaca" }}>
+        <div className="insight-banner danger" style={{ marginBottom: "12px" }}>
           {deadlineAlerts.overdue_count} deadline{deadlineAlerts.overdue_count > 1 ? "s are" : " is"} over.
           Please resolve immediately.
         </div>
@@ -572,7 +615,7 @@ export default function DashboardPage() {
 
       {canShowNotifications && deadlineAlerts.due_soon_count > 0 && (
         <div className="insight-banner" style={{ marginBottom: "16px" }}>
-          {deadlineAlerts.due_soon_count} email{deadlineAlerts.due_soon_count > 1 ? "s have" : " has"} deadline within 24 hours.
+          {deadlineAlerts.due_soon_count} email{deadlineAlerts.due_soon_count > 1 ? "s have" : " has"} deadline within {reminderWindowHours} hours.
         </div>
       )}
 
@@ -669,16 +712,19 @@ export default function DashboardPage() {
 
       <div className="category-overview category-overview-top">
         <div className="filter-container">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              className={`filter-btn ${filter === cat ? "active" : ""}`}
-              onClick={() => setFilter(cat)}
-            >
-              <span style={{ marginRight: "6px" }}>{CATEGORY_ICONS[cat] || "•"}</span>
-              {cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const IconComp = CATEGORY_ICONS[cat];
+            return (
+              <button
+                key={cat}
+                className={`filter-btn ${filter === cat ? "active" : ""}`}
+                onClick={() => setFilter(cat)}
+              >
+                <span style={{ marginRight: "6px" }}>{IconComp ? <IconComp /> : <FaInbox />}</span>
+                {cat}
+              </button>
+            );
+          })}
         </div>
 
         <div className="toolbar-actions">
@@ -816,3 +862,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+

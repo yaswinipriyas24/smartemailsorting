@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
+import { apiUrl } from "../utils/api";
+import { clearSession, getAuthToken } from "../utils/authSession";
 
 function ConnectGmailPage() {
   const [loading, setLoading] = useState(false);
@@ -14,11 +16,16 @@ function ConnectGmailPage() {
     setError("");
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getAuthToken();
+      if (!token) {
+        clearSession();
+        navigate("/login");
+        return;
+      }
       
       // Get OAuth URL from backend
       const response = await axios.get(
-        "http://localhost:8000/gmail/connect",
+        apiUrl("/gmail/connect"),
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

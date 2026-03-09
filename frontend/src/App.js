@@ -8,17 +8,25 @@ import AdminPage from "./pages/AdminPage";
 import ProfilePage from "./pages/ProfilePage";
 import LandingPage from "./pages/LandingPage";
 import { applyTheme, getStoredPreferences } from "./utils/userPreferences";
+import { clearSession, isTokenValid } from "./utils/authSession";
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/login" />;
+  if (!isTokenValid(token)) {
+    clearSession();
+    return <Navigate to="/login" />;
+  }
+  return children;
 };
 
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem("token");
   const role = localStorage.getItem("role");
 
-  if (!token) return <Navigate to="/login" />;
+  if (!isTokenValid(token)) {
+    clearSession();
+    return <Navigate to="/login" />;
+  }
   if (role !== "admin") return <Navigate to="/dashboard" />;
 
   return children;

@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
-import { applyTheme, syncPreferencesFromProfile } from "../utils/userPreferences";
-
-const API_BASE = "http://localhost:8000";
+import { applyTheme, setReminderWindowHours, syncPreferencesFromProfile } from "../utils/userPreferences";
+import { clearSession, getAuthToken } from "../utils/authSession";
+import { apiUrl } from "../utils/api";
 const DEFAULT_CATEGORIES = [
   "All",
   "Announcements",
@@ -38,7 +38,7 @@ function decodeJwt(token) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
+  const token = getAuthToken();
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
@@ -55,6 +55,7 @@ export default function ProfilePage() {
   const [urgentAlertEnabled, setUrgentAlertEnabled] = useState(true);
   const [theme, setTheme] = useState("light");
   const [language, setLanguage] = useState("en");
+  const [reminderWindowHours, setReminderHours] = useState(24);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -68,8 +69,7 @@ export default function ProfilePage() {
   }, [token]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    clearSession();
     navigate("/login");
   }, [navigate]);
 
@@ -82,7 +82,7 @@ export default function ProfilePage() {
     try {
       setLoading(true);
       setError("");
-      const res = await axios.get(`${API_BASE}/auth/me`, { headers: authHeaders });
+      const res = await axios.get(apiUrl("/auth/me"), { headers: authHeaders });
       const data = res.data || {};
       syncPreferencesFromProfile(data);
       setProfile(data);
@@ -92,6 +92,7 @@ export default function ProfilePage() {
       setUrgentAlertEnabled(data.urgent_alert_enabled !== false);
       setTheme(data.theme || "light");
       setLanguage(data.language || "en");
+      setReminderHours(Number(data.reminder_window_hours || 24));
     } catch (err) {
       if (err?.response?.status === 401) {
         logout();
@@ -114,14 +115,15 @@ export default function ProfilePage() {
       setError("");
       setSuccess("");
       await axios.patch(
-        `${API_BASE}/profile`,
+        apiUrl("/profile"),
         {
           full_name: fullName,
           default_category_view: defaultCategoryView,
           notification_enabled: notificationEnabled,
           urgent_alert_enabled: urgentAlertEnabled,
           theme,
-          language
+          language,
+          reminder_window_hours: reminderWindowHours
         },
         { headers: authHeaders }
       );
@@ -130,8 +132,10 @@ export default function ProfilePage() {
         notification_enabled: notificationEnabled,
         urgent_alert_enabled: urgentAlertEnabled,
         default_category_view: defaultCategoryView,
-        language
+        language,
+        reminder_window_hours: reminderWindowHours
       });
+      setReminderWindowHours(reminderWindowHours);
       setSuccess("Profile preferences updated.");
       await loadProfile();
     } catch (err) {
@@ -148,7 +152,7 @@ export default function ProfilePage() {
       setError("");
       setSuccess("");
       await axios.post(
-        `${API_BASE}/auth/change-password`,
+        apiUrl("/auth/change-password"),
         {
           current_password: currentPassword,
           new_password: newPassword,
@@ -171,7 +175,7 @@ export default function ProfilePage() {
     try {
       setBusyReconnect(true);
       setError("");
-      const res = await axios.get(`${API_BASE}/gmail/connect`, { headers: authHeaders });
+      const res = await axios.get(apiUrl("/gmail/connect"), { headers: authHeaders });
       const authUrl = res?.data?.auth_url;
       if (!authUrl) throw new Error("OAuth URL missing");
       window.location.assign(authUrl);
@@ -187,7 +191,7 @@ export default function ProfilePage() {
       setBusyLogoutAll(true);
       setError("");
       setSuccess("");
-      await axios.post(`${API_BASE}/auth/logout-all-devices`, {}, { headers: authHeaders });
+      await axios.post(apiUrl("/auth/logout-all-devices"), {}, { headers: authHeaders });
       logout();
     } catch (err) {
       setError(err?.response?.data?.detail || "Failed to logout all devices");
@@ -203,9 +207,9 @@ export default function ProfilePage() {
   return (
     <div className="dashboard user-dashboard">
       <div className="user-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+        <div className="page-header-row">
           <h1 className="title" style={{ marginBottom: 0 }}>Profile</h1>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="header-actions">
             <button className="close-btn" onClick={() => navigate(profile?.role === "admin" ? "/admin" : "/dashboard")}>Back</button>
             <button className="close-btn" onClick={logout}>Logout</button>
           </div>
@@ -225,7 +229,7 @@ export default function ProfilePage() {
         </div>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: "0 0 6px 0" }}>{fullName || "Unnamed User"}</h2>
-          <p style={{ margin: "0 0 6px 0", color: "#475569" }}>{profile?.email}</p>
+          <p className="user-subtitle" style={{ margin: "0 0 6px 0" }}>{profile?.email}</p>
           <span className={`badge ${profile?.role === "admin" ? "urgent" : "normal"}`}>{profile?.role || "user"}</span>
         </div>
       </div>
@@ -274,6 +278,17 @@ export default function ProfilePage() {
           </select>
           <label><input type="checkbox" checked={notificationEnabled} onChange={(e) => setNotificationEnabled(e.target.checked)} /> Enable notifications</label>
           <label><input type="checkbox" checked={urgentAlertEnabled} onChange={(e) => setUrgentAlertEnabled(e.target.checked)} /> Enable urgent alerts</label>
+          <select
+            className="reply-textarea"
+            style={{ minHeight: "42px", marginTop: 0 }}
+            value={reminderWindowHours}
+            onChange={(e) => setReminderHours(Number(e.target.value))}
+          >
+            <option value={6}>Reminder window: 6 hours</option>
+            <option value={12}>Reminder window: 12 hours</option>
+            <option value={24}>Reminder window: 24 hours</option>
+            <option value={48}>Reminder window: 48 hours</option>
+          </select>
           <label><input type="radio" name="theme" value="light" checked={theme === "light"} onChange={(e) => { setTheme(e.target.value); applyTheme(e.target.value); }} /> Light Theme</label>
           <label><input type="radio" name="theme" value="dark" checked={theme === "dark"} onChange={(e) => { setTheme(e.target.value); applyTheme(e.target.value); }} /> Dark Theme</label>
           <select className="reply-textarea" style={{ minHeight: "42px", marginTop: 0 }} value={language} onChange={(e) => setLanguage(e.target.value)}>

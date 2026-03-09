@@ -6,6 +6,8 @@ import csv
 import os
 import subprocess
 import sys
+import threading
+import time
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -16,7 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 import logging
 
-from backend.database import init_db, get_db
+from backend.database import init_db, get_db, SessionLocal
 from backend.models import (
     Email,
     User,
@@ -48,6 +50,8 @@ ALLOWED_ROLES = {"user", "admin"}
 ALLOWED_THEMES = {"light", "dark"}
 ALLOWED_LANGUAGES = {"en"}
 MODEL_VERSION = os.getenv("MODEL_VERSION", "tfidf-logreg-v1")
+REMINDER_POLL_SECONDS = int(os.getenv("REMINDER_POLL_SECONDS", "300"))
+DEFAULT_REMINDER_WINDOW_HOURS = int(os.getenv("DEFAULT_REMINDER_WINDOW_HOURS", "24"))
 ALLOWED_CATEGORIES = {
     "Announcements",
     "Customer Support",
@@ -154,6 +158,42 @@ def _record_admin_event(db: Session, event_type: str, level: str, message: str) 
     )
 
 
+def _get_user_reminder_window_hours(db: Session, user_id: int) -> int:
+    default_val = max(DEFAULT_REMINDER_WINDOW_HOURS, 1)
+    row = (
+        db.query(AdminEventLog)
+        .filter(
+            AdminEventLog.event_type == "user_pref_reminder_window",
+            AdminEventLog.message.like(f"user_id={user_id};hours=%"),
+        )
+        .order_by(AdminEventLog.created_at.desc())
+        .first()
+    )
+    if not row or not row.message:
+        return default_val
+
+    marker = "hours="
+    idx = row.message.find(marker)
+    if idx < 0:
+        return default_val
+    raw = row.message[idx + len(marker):].strip()
+    if not raw.isdigit():
+        return default_val
+    parsed = int(raw)
+    return parsed if parsed > 0 else default_val
+
+
+def _set_user_reminder_window_hours(db: Session, user_id: int, hours: int) -> None:
+    safe_hours = max(int(hours), 1)
+    db.add(
+        AdminEventLog(
+            event_type="user_pref_reminder_window",
+            level="info",
+            message=f"user_id={user_id};hours={safe_hours}",
+        )
+    )
+
+
 def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
     if profile:
@@ -165,7 +205,57 @@ def _get_or_create_profile(db: Session, user: User) -> UserProfile:
     return profile
 
 
-def _build_deadline_notifications(db: Session, user: User, lookahead_hours: int = 24):
+def _deadline_days_remaining(deadline_date: datetime, now: datetime) -> int:
+    return (deadline_date.date() - now.date()).days
+
+
+def _update_deadline_fields(email: Email, now: datetime) -> bool:
+    if not email.deadline_date:
+        if email.days_remaining is not None:
+            email.days_remaining = None
+            return True
+        return False
+
+    next_days = _deadline_days_remaining(email.deadline_date, now)
+    changed = email.days_remaining != next_days
+    if changed:
+        email.days_remaining = next_days
+
+    # Keep urgency aligned with deadlines for unresolved emails.
+    if not email.is_read:
+        should_be_urgent = next_days <= 2
+        if bool(email.urgent) != should_be_urgent:
+            email.urgent = should_be_urgent
+            changed = True
+    return changed
+
+
+def _already_notified_today(
+    db: Session,
+    user_id: int,
+    email_id: int,
+    notification_type: str,
+    now: datetime | None = None,
+) -> bool:
+    key_prefix = f"user_id={user_id};email_id={email_id};type={notification_type};source="
+    query = db.query(AdminEventLog).filter(
+        AdminEventLog.event_type == "deadline_notify",
+        AdminEventLog.message.like(f"{key_prefix}%"),
+    )
+    if now is not None:
+        day_start = datetime(now.year, now.month, now.day)
+        query = query.filter(AdminEventLog.created_at >= day_start)
+    row = query.first()
+    return row is not None
+
+
+def _build_deadline_notifications(
+    db: Session,
+    user: User,
+    lookahead_hours: int = 24,
+    persist_events: bool = True,
+    source: str = "api",
+):
     now = datetime.utcnow()
     soon_cutoff = now + timedelta(hours=max(int(lookahead_hours), 1))
 
@@ -181,34 +271,91 @@ def _build_deadline_notifications(db: Session, user: User, lookahead_hours: int 
     )
 
     notifications = []
+    email_state_changed = False
     for email in rows:
+        if _update_deadline_fields(email, now):
+            email_state_changed = True
+
         if not email.deadline_date:
             continue
 
         if email.deadline_date <= now:
-            notifications.append(
-                {
-                    "email_id": email.id,
-                    "subject": email.subject or "(No Subject)",
-                    "deadline_date": email.deadline_date.isoformat(),
-                    "type": "overdue",
-                    "message": "Deadline reached. Take action now.",
-                }
-            )
+            payload = {
+                "email_id": email.id,
+                "subject": email.subject or "(No Subject)",
+                "deadline_date": email.deadline_date.isoformat(),
+                "type": "overdue",
+                "message": "Deadline reached. Take action now.",
+            }
+            notifications.append(payload)
+            # Overdue notifications are logged once per email to prevent warning spam.
+            if persist_events and not _already_notified_today(
+                db, user.id, email.id, "overdue", None
+            ):
+                db.add(
+                    AdminEventLog(
+                        event_type="deadline_notify",
+                        level="warning",
+                        message=f"user_id={user.id};email_id={email.id};type=overdue;source={source}",
+                    )
+                )
             continue
 
         if email.deadline_date <= soon_cutoff:
-            notifications.append(
-                {
-                    "email_id": email.id,
-                    "subject": email.subject or "(No Subject)",
-                    "deadline_date": email.deadline_date.isoformat(),
-                    "type": "due_soon",
-                    "message": "Deadline approaching soon.",
-                }
-            )
+            payload = {
+                "email_id": email.id,
+                "subject": email.subject or "(No Subject)",
+                "deadline_date": email.deadline_date.isoformat(),
+                "type": "due_soon",
+                "message": "Deadline approaching soon.",
+            }
+            notifications.append(payload)
+            # Due soon reminders can repeat once per day until the email is resolved.
+            if persist_events and not _already_notified_today(
+                db, user.id, email.id, "due_soon", now
+            ):
+                db.add(
+                    AdminEventLog(
+                        event_type="deadline_notify",
+                        level="info",
+                        message=f"user_id={user.id};email_id={email.id};type=due_soon;source={source}",
+                    )
+                )
+
+    if email_state_changed or persist_events:
+        db.commit()
 
     return notifications
+
+
+def _run_deadline_notification_worker() -> None:
+    while True:
+        db = SessionLocal()
+        try:
+            users = db.query(User).filter(User.is_active.is_(True)).all()
+            for user in users:
+                profile = _get_or_create_profile(db, user)
+                if profile.notification_enabled is False:
+                    continue
+                user_window = _get_user_reminder_window_hours(db, user.id)
+                _build_deadline_notifications(
+                    db=db,
+                    user=user,
+                    lookahead_hours=user_window,
+                    persist_events=True,
+                    source="scheduler",
+                )
+        except Exception:
+            logger.exception("Deadline reminder worker iteration failed")
+        finally:
+            db.close()
+        time.sleep(max(REMINDER_POLL_SECONDS, 60))
+
+
+@app.on_event("startup")
+def start_background_workers():
+    thread = threading.Thread(target=_run_deadline_notification_worker, daemon=True)
+    thread.start()
 
 
 # =================================================
@@ -223,6 +370,7 @@ def get_current_user_info(
         current_user.gmail_email and current_user.gmail_refresh_token
     )
     profile = _get_or_create_profile(db, current_user)
+    reminder_window_hours = _get_user_reminder_window_hours(db, current_user.id)
 
     total_emails_processed = (
         db.query(func.count(Email.id))
@@ -261,6 +409,7 @@ def get_current_user_info(
         "urgent_alert_enabled": bool(profile.urgent_alert_enabled),
         "theme": profile.theme,
         "language": profile.language,
+        "reminder_window_hours": reminder_window_hours,
         "two_factor_enabled": bool(profile.two_factor_enabled),
         "token_expiry": current_user.gmail_token_expiry.isoformat() if current_user.gmail_token_expiry else None,
         "total_emails_processed": int(total_emails_processed),
@@ -279,6 +428,7 @@ class ProfileUpdateRequest(BaseModel):
     urgent_alert_enabled: bool | None = None
     theme: str | None = None
     language: str | None = None
+    reminder_window_hours: int | None = None
 
 
 @app.patch("/profile")
@@ -307,6 +457,10 @@ def update_profile(
         if language not in ALLOWED_LANGUAGES:
             raise HTTPException(status_code=400, detail="Invalid language")
         profile.language = language
+    if payload.reminder_window_hours is not None:
+        if payload.reminder_window_hours < 1 or payload.reminder_window_hours > 72:
+            raise HTTPException(status_code=400, detail="Invalid reminder window")
+        _set_user_reminder_window_hours(db, current_user.id, payload.reminder_window_hours)
 
     db.commit()
     return {"message": "Profile updated successfully"}
@@ -392,6 +546,21 @@ def sync_emails_endpoint(
         raise
     except Exception as e:
         logger.exception("Sync exception for user_id=%s", current_user.id)
+        msg = str(e)
+        lowered = msg.lower()
+        if (
+            "invalid_grant" in lowered
+            or "token has been expired or revoked" in lowered
+            or "refresh token" in lowered
+        ):
+            current_user.gmail_access_token = None
+            current_user.gmail_refresh_token = None
+            current_user.gmail_token_expiry = None
+            db.commit()
+            raise HTTPException(
+                status_code=400,
+                detail="Gmail token expired or revoked. Please reconnect Gmail."
+            )
         raise HTTPException(
             status_code=500,
             detail=f"Sync failed: {str(e)}"
@@ -420,6 +589,13 @@ def get_emails(
         .limit(limit)
         .all()
     )
+    now = datetime.utcnow()
+    changed = False
+    for e in emails:
+        if _update_deadline_fields(e, now):
+            changed = True
+    if changed:
+        db.commit()
 
     return {
         "count": len(emails),
@@ -486,6 +662,13 @@ def get_urgent_emails(
         .order_by(Email.deadline_date.asc())
         .all()
     )
+    now = datetime.utcnow()
+    changed = False
+    for e in emails:
+        if _update_deadline_fields(e, now):
+            changed = True
+    if changed:
+        db.commit()
     return {
         "count": len(emails),
         "data": [
@@ -516,6 +699,13 @@ def get_upcoming_deadlines(
         .order_by(Email.deadline_date.asc())
         .all()
     )
+    now = datetime.utcnow()
+    changed = False
+    for e in emails:
+        if _update_deadline_fields(e, now):
+            changed = True
+    if changed:
+        db.commit()
     return {
         "count": len(emails),
         "data": [
@@ -537,7 +727,14 @@ def get_deadline_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    notifications = _build_deadline_notifications(db, current_user, lookahead_hours=lookahead_hours)
+    hours = lookahead_hours if lookahead_hours > 0 else _get_user_reminder_window_hours(db, current_user.id)
+    notifications = _build_deadline_notifications(
+        db,
+        current_user,
+        lookahead_hours=hours,
+        persist_events=False,
+        source="api",
+    )
 
     overdue_count = sum(1 for n in notifications if n["type"] == "overdue")
     due_soon_count = sum(1 for n in notifications if n["type"] == "due_soon")
@@ -546,6 +743,7 @@ def get_deadline_notifications(
         "count": len(notifications),
         "overdue_count": overdue_count,
         "due_soon_count": due_soon_count,
+        "lookahead_hours": hours,
         "data": notifications,
     }
 
@@ -943,3 +1141,33 @@ def admin_retrain_model(
         )
         db.commit()
         raise HTTPException(status_code=500, detail=f"Retraining failed: {exc}")
+
+
+@app.post("/admin/notifications/run")
+def admin_run_deadline_notifications(
+    lookahead_hours: int = DEFAULT_REMINDER_WINDOW_HOURS,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    users = db.query(User).filter(User.is_active.is_(True)).all()
+    processed = 0
+    generated = 0
+    for user in users:
+        profile = _get_or_create_profile(db, user)
+        if profile.notification_enabled is False:
+            continue
+        notifications = _build_deadline_notifications(
+            db=db,
+            user=user,
+            lookahead_hours=max(int(lookahead_hours), 1),
+            persist_events=True,
+            source="admin_manual",
+        )
+        processed += 1
+        generated += len(notifications)
+
+    return {
+        "message": "Deadline notification run completed",
+        "users_processed": processed,
+        "notifications_detected": generated,
+    }

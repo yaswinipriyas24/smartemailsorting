@@ -1,6 +1,7 @@
 .container {
   text-align: center;
   margin-top: 50px;
+  color: #f8fafc;
 }
 
 .form {
@@ -18,12 +19,14 @@
   padding: 10px;
   margin-top: 5px;
   border-radius: 4px;
-  border: 1px solid #ccc;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f8fafc;
   box-sizing: border-box; /* Ensures padding doesn't affect width */
 }
 
 .error {
-  color: #dc3545;
+  color: #ef4444;
   font-size: 14px;
   margin-bottom: 10px;
 }
@@ -40,33 +43,34 @@
 }
 
 .button:disabled {
-  background-color: #cccccc !important; /* Overrides specific button colors */
+  background-color: #475569 !important; /* Overrides specific button colors */
   cursor: not-allowed;
 }
 
 .buttonPrimary {
-  background-color: #007bff;
+  background-color: #3b82f6;
 }
 
 .buttonPrimary:hover:not(:disabled) {
-  background-color: #0069d9;
+  background-color: #2563eb;
 }
 
 .buttonSuccess {
-  background-color: #28a745;
+  background-color: #10b981;
 }
 
 .buttonSuccess:hover:not(:disabled) {
-  background-color: #218838;
+  background-color: #059669;
 }
 
 .switchText {
   margin-top: 15px;
   font-size: 14px;
+  color: #cbd5e1;
 }
 
 .switchLink {
-  color: #007bff;
+  color: #3b82f6;
   cursor: pointer;
   text-decoration: underline;
 }

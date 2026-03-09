@@ -3,6 +3,7 @@ import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import "../styles/auth.css";
 import { syncPreferencesFromProfile } from "../utils/userPreferences";
+import { apiUrl } from "../utils/api";
 
 export default function LoginPage() {
   const [view, setView] = useState("login");
@@ -14,6 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
+  const [isOpened, setIsOpened] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -69,7 +71,7 @@ export default function LoginPage() {
       formData.append("password", password);
 
       const response = await axios.post(
-        "http://localhost:8000/auth/login",
+        apiUrl("/auth/login"),
         formData,
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -82,7 +84,7 @@ export default function LoginPage() {
       localStorage.setItem("role", role);
       setSuccess("Login successful! Redirecting...");
 
-      const meRes = await axios.get("http://localhost:8000/auth/me", {
+      const meRes = await axios.get(apiUrl("/auth/me"), {
         headers: { Authorization: `Bearer ${token}` }
       });
       syncPreferencesFromProfile(meRes?.data);
@@ -120,7 +122,7 @@ export default function LoginPage() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      await axios.post("http://localhost:8000/auth/register", {
+      await axios.post(apiUrl("/auth/register"), {
         email: normalizedEmail,
         username: normalizedEmail,
         password,
@@ -155,7 +157,7 @@ export default function LoginPage() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const response = await axios.post("http://localhost:8000/auth/forgot-password", {
+      const response = await axios.post(apiUrl("/auth/forgot-password"), {
         email: normalizedEmail,
         new_password: password,
         confirm_password: confirmPassword
@@ -173,12 +175,41 @@ export default function LoginPage() {
     }
   };
 
+  const handleEnvelopeClick = () => {
+    const audio = new Audio(
+      "https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3"
+    );
+    audio.volume = 0.5;
+
+    // Attempt to play the sound, but don't let it block the UI.
+    audio.play().catch((err) => {
+      console.warn("Audio play was blocked by the browser:", err);
+    });
+
+    // Use a timeout to create a consistent delay for the card to appear.
+    // This is more reliable than the 'ended' event when the component unmounts.
+    setTimeout(() => setIsOpened(true), 600);
+  };
+
   return (
     <div className="auth-shell">
+      <div className="auth-noise" />
       <div className="auth-glow auth-glow-a" />
       <div className="auth-glow auth-glow-b" />
 
-      <div className="auth-card">
+      {/* Subtle background icons */}
+      <div className="auth-sticker sticker-mail" />
+      <div className="auth-sticker sticker-folder" />
+      <div className="auth-sticker sticker-check" />
+
+      {!isOpened ? (
+        <div className="auth-envelope-wrapper" onClick={handleEnvelopeClick}>
+          <div className="auth-envelope-icon" />
+          <p className="auth-envelope-hint">You have a new message</p>
+          <p className="auth-envelope-sub">Click to open</p>
+        </div>
+      ) : (
+        <div className="auth-card">
         <h1 className="auth-brand">Smart Email Sorting</h1>
         <h2 className="auth-title">
           {view === "login"
@@ -309,6 +340,7 @@ export default function LoginPage() {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

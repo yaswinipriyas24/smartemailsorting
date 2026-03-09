@@ -3,6 +3,7 @@ const NOTIFICATION_KEY = "notification_enabled";
 const URGENT_ALERT_KEY = "urgent_alert_enabled";
 const DEFAULT_CATEGORY_KEY = "default_category_view";
 const LANGUAGE_KEY = "language";
+const REMINDER_WINDOW_KEY = "reminder_window_hours";
 
 const TRUE_VALUES = new Set(["true", "1", "yes", "on"]);
 
@@ -21,12 +22,15 @@ export function applyTheme(theme) {
 }
 
 export function getStoredPreferences() {
+  const rawReminder = Number(localStorage.getItem(REMINDER_WINDOW_KEY) || 24);
+  const reminderWindowHours = Number.isFinite(rawReminder) && rawReminder > 0 ? rawReminder : 24;
   return {
     theme: localStorage.getItem(THEME_KEY) || "light",
     notificationEnabled: toBool(localStorage.getItem(NOTIFICATION_KEY), true),
     urgentAlertEnabled: toBool(localStorage.getItem(URGENT_ALERT_KEY), true),
     defaultCategoryView: localStorage.getItem(DEFAULT_CATEGORY_KEY) || "All",
-    language: localStorage.getItem(LANGUAGE_KEY) || "en"
+    language: localStorage.getItem(LANGUAGE_KEY) || "en",
+    reminderWindowHours
   };
 }
 
@@ -45,5 +49,16 @@ export function syncPreferencesFromProfile(profile) {
   if (profile.language != null) {
     localStorage.setItem(LANGUAGE_KEY, profile.language || "en");
   }
+  if (profile.reminder_window_hours != null) {
+    const val = Number(profile.reminder_window_hours);
+    if (Number.isFinite(val) && val > 0) {
+      localStorage.setItem(REMINDER_WINDOW_KEY, String(Math.round(val)));
+    }
+  }
 }
 
+export function setReminderWindowHours(hours) {
+  const val = Number(hours);
+  if (!Number.isFinite(val) || val <= 0) return;
+  localStorage.setItem(REMINDER_WINDOW_KEY, String(Math.round(val)));
+}

@@ -3,8 +3,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
 import { getStoredPreferences, syncPreferencesFromProfile } from "../utils/userPreferences";
-
-const API_BASE = "http://localhost:8000";
+import { clearSession, getAuthToken } from "../utils/authSession";
+import { apiUrl } from "../utils/api";
 
 const CATEGORIES = [
   "Announcements",
@@ -28,7 +28,6 @@ const CATEGORIES = [
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -46,15 +45,18 @@ export default function AdminPage() {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
 
-  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const authHeaders = useMemo(() => {
+    const token = getAuthToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    clearSession();
     navigate("/login");
   }, [navigate]);
 
   const loadAll = useCallback(async () => {
+    const token = getAuthToken();
     if (!token) {
       navigate("/login");
       return;
@@ -64,7 +66,7 @@ export default function AdminPage() {
       setLoading(true);
       setError("");
 
-      const meRes = await axios.get(`${API_BASE}/auth/me`, { headers: authHeaders });
+      const meRes = await axios.get(apiUrl("/auth/me"), { headers: authHeaders });
       if (meRes?.data?.role !== "admin") {
         navigate("/dashboard");
         return;
@@ -74,9 +76,9 @@ export default function AdminPage() {
       localStorage.setItem("role", "admin");
 
       const [monitoringRes, emailsRes, usersRes] = await Promise.all([
-        axios.get(`${API_BASE}/admin/monitoring`, { headers: authHeaders }),
-        axios.get(`${API_BASE}/emails?limit=200`, { headers: authHeaders }),
-        axios.get(`${API_BASE}/admin/users`, { headers: authHeaders })
+        axios.get(apiUrl("/admin/monitoring"), { headers: authHeaders }),
+        axios.get(apiUrl("/emails?limit=200"), { headers: authHeaders }),
+        axios.get(apiUrl("/admin/users"), { headers: authHeaders })
       ]);
 
       setMonitoring(monitoringRes.data || null);
@@ -91,7 +93,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, logout, navigate, token]);
+  }, [authHeaders, logout, navigate]);
 
   useEffect(() => {
     loadAll();
@@ -124,7 +126,7 @@ export default function AdminPage() {
       setError("");
       setSuccess("");
       await axios.put(
-        `${API_BASE}/admin/emails/${email.id}/override`,
+        apiUrl(`/admin/emails/${email.id}/override`),
         {
           category: selection.category,
           urgent: selection.urgent
@@ -143,7 +145,7 @@ export default function AdminPage() {
       setSyncing(true);
       setError("");
       setSuccess("");
-      const res = await axios.post(`${API_BASE}/admin/retrain`, {}, { headers: authHeaders, timeout: 3600000 });
+      const res = await axios.post(apiUrl("/admin/retrain"), {}, { headers: authHeaders, timeout: 3600000 });
       setSuccess(res?.data?.message || "Retraining completed");
       await loadAll();
     } catch (err) {
@@ -159,7 +161,7 @@ export default function AdminPage() {
       setError("");
       setSuccess("");
       await axios.post(
-        `${API_BASE}/admin/users`,
+        apiUrl("/admin/users"),
         { email: newUserEmail, password: newUserPassword, role: newUserRole },
         { headers: authHeaders }
       );
@@ -178,7 +180,7 @@ export default function AdminPage() {
       setError("");
       setSuccess("");
       await axios.patch(
-        `${API_BASE}/admin/users/${user.id}`,
+        apiUrl(`/admin/users/${user.id}`),
         { role: user.role, is_active: user.is_active },
         { headers: authHeaders }
       );
@@ -193,7 +195,7 @@ export default function AdminPage() {
     try {
       setError("");
       setSuccess("");
-      await axios.delete(`${API_BASE}/admin/users/${userId}`, { headers: authHeaders });
+      await axios.delete(apiUrl(`/admin/users/${userId}`), { headers: authHeaders });
       setSuccess("User removed");
       await loadAll();
     } catch (err) {

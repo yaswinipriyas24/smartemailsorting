@@ -1,0 +1,12 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#EAF5FF"/>
+  <g opacity="0.5">
+    <circle cx="260" cy="180" r="260" fill="#9EE6FF"/>
+    <circle cx="1780" cy="920" r="320" fill="#FFD6B8"/>
+    <circle cx="1540" cy="220" r="220" fill="#B7D7FF"/>
+  </g>
+  <g opacity="0.28">
+    <path d="M-120 860C240 700 520 720 780 860C1030 1000 1360 1020 2020 780V1200H-120V860Z" fill="#B6F0FF"/>
+    <path d="M-120 980C310 780 560 830 860 990C1150 1140 1440 1140 2020 910V1200H-120V980Z" fill="#FFD8B6"/>
+  </g>
+</svg>
