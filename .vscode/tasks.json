@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docker Compose: Up (Build)",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "up", "-d", "--build"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker Compose: Down",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "down"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker Compose: Logs Backend",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "logs", "-f", "backend"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Docker Compose: Restart Backend",
+      "type": "shell",
+      "command": "docker",
+      "args": ["compose", "restart", "backend"],
+      "problemMatcher": []
+    }
+  ]
+}

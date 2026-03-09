@@ -1,6 +1,7 @@
 # backend/ml_model.py
 
 import os
+import logging
 import joblib
 import numpy as np
 import tensorflow as tf
@@ -14,19 +15,27 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TFIDF_MODEL_PATH = os.path.join(BASE_DIR, "backend", "tfidf_model.pkl")
 BERT_MODEL_PATH = os.path.join(BASE_DIR, "backend", "email_sort_model")
+LABEL_ENCODER_PATH = os.path.join(BASE_DIR, "backend", "label_encoder.pkl")
+
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------
-# Load TF-IDF model
+# Load models (prefer transformer, fallback to TF-IDF)
 # -------------------------------------------------
+label_encoder = joblib.load(LABEL_ENCODER_PATH)
 tfidf_bundle = joblib.load(TFIDF_MODEL_PATH)
 vectorizer = tfidf_bundle["vectorizer"]
 classifier = tfidf_bundle["classifier"]
 
-# -------------------------------------------------
-# Load DistilBERT
-# -------------------------------------------------
-tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
-bert_model = TFDistilBertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
+USE_TRANSFORMER = True
+try:
+    tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
+    bert_model = TFDistilBertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
+except Exception as exc:
+    USE_TRANSFORMER = False
+    tokenizer = None
+    bert_model = None
+    logger.warning("Transformer model unavailable, using TF-IDF fallback: %s", exc)
 
 # -------------------------------------------------
 # NLP + rules
@@ -51,13 +60,21 @@ def classify_email(subject: str, body: str):
     text_lower = text.lower()
 
     # ---------------------------------------
-    # TF-IDF prediction
+    # DistilBERT prediction (with TF-IDF fallback)
     # ---------------------------------------
-    vec = vectorizer.transform([text_lower])
-    probs = classifier.predict_proba(vec)[0]
+    if USE_TRANSFORMER and tokenizer is not None and bert_model is not None:
+        inputs = tokenizer(text, truncation=True, padding=True, max_length=128, return_tensors="tf")
+        logits = bert_model(inputs).logits
+        probs = tf.nn.softmax(logits, axis=1).numpy()[0]
 
-    confidence = float(np.max(probs))
-    label = classifier.classes_[np.argmax(probs)]
+        confidence = float(np.max(probs))
+        label_idx = np.argmax(probs)
+        label = label_encoder.inverse_transform([label_idx])[0]
+    else:
+        vec = vectorizer.transform([text_lower])
+        probs = classifier.predict_proba(vec)[0]
+        confidence = float(np.max(probs))
+        label = classifier.classes_[np.argmax(probs)]
 
     # ---------------------------------------
     # Deadline extraction

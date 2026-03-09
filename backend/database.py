@@ -1,6 +1,7 @@
 # backend/database.py
 
 import os
+from urllib.parse import urlparse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
@@ -16,7 +17,12 @@ if not DATABASE_URL:
 # Create engine (SSL only for PostgreSQL)
 connect_args = {}
 if DATABASE_URL.startswith("postgresql"):
-    connect_args["sslmode"] = "require"
+    # Allow explicit override; default to non-SSL for local docker db service.
+    sslmode = os.getenv("DATABASE_SSLMODE")
+    if not sslmode:
+        host = (urlparse(DATABASE_URL).hostname or "").strip().lower()
+        sslmode = "disable" if host in {"db", "localhost", "127.0.0.1"} else "require"
+    connect_args["sslmode"] = sslmode
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,

@@ -6,7 +6,9 @@ WORKDIR /app
 
 # Set environment variables to prevent buffering and configure cache
 ENV PYTHONUNBUFFERED=1 \
-    HF_HOME=/app/cache
+    HF_HOME=/app/cache \
+    PORT=8000 \
+    APP_ENV=production
 
 # Install system dependencies required for psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc && rm -rf /var/lib/apt/lists/*
@@ -29,8 +31,8 @@ COPY --chown=user:user backend/ ./backend/
 # Switch to the non-root user
 USER user
 
-# Expose port 7860 (Standard for Hugging Face Spaces)
-EXPOSE 7860
+# Expose app port
+EXPOSE 8000
 
 # Run FastAPI
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

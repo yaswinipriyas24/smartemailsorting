@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 import logging
 
@@ -42,6 +42,20 @@ app = FastAPI(
 )
 logger = logging.getLogger(__name__)
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name: str, default: list[str]) -> list[str]:
+    value = os.getenv(name, "")
+    if not value.strip():
+        return default
+    return [part.strip() for part in value.split(",") if part.strip()]
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATASET_PATH = os.path.join(BASE_DIR, "dataset", "emails.csv")
 TFIDF_TRAIN_SCRIPT = os.path.join(BASE_DIR, "backend", "tfidf_train.py")
@@ -52,6 +66,15 @@ ALLOWED_LANGUAGES = {"en"}
 MODEL_VERSION = os.getenv("MODEL_VERSION", "tfidf-logreg-v1")
 REMINDER_POLL_SECONDS = int(os.getenv("REMINDER_POLL_SECONDS", "300"))
 DEFAULT_REMINDER_WINDOW_HOURS = int(os.getenv("DEFAULT_REMINDER_WINDOW_HOURS", "24"))
+ENABLE_DEADLINE_WORKER = _env_bool("ENABLE_DEADLINE_WORKER", True)
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+ALLOWED_CORS_ORIGINS = _env_list(
+    "CORS_ALLOW_ORIGINS",
+    [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
 ALLOWED_CATEGORIES = {
     "Announcements",
     "Customer Support",
@@ -77,10 +100,7 @@ ALLOWED_CATEGORIES = {
 # -------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,6 +124,26 @@ def favicon():
 @app.get("/")
 def root():
     return {"status": "Smart Email Sorting API is running"}
+
+
+@app.get("/healthz")
+def healthz():
+    return {
+        "status": "ok",
+        "app_env": APP_ENV,
+    }
+
+
+@app.get("/readyz")
+def readyz():
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"database unavailable: {exc}")
+    finally:
+        db.close()
+    return {"status": "ready"}
 
 
 # =================================================
@@ -354,6 +394,9 @@ def _run_deadline_notification_worker() -> None:
 
 @app.on_event("startup")
 def start_background_workers():
+    if not ENABLE_DEADLINE_WORKER:
+        logger.info("Deadline notification worker disabled by ENABLE_DEADLINE_WORKER")
+        return
     thread = threading.Thread(target=_run_deadline_notification_worker, daemon=True)
     thread.start()
 
