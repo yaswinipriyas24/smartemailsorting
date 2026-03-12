@@ -1,0 +1,41 @@
+{
+  "run_id": "tfidf-20260309140326",
+  "model_id": "tfidf-20260309140326",
+  "dataset": {
+    "rows_initial": 15303,
+    "rows_valid": 3020,
+    "dropped_missing": 0,
+    "dropped_empty": 0,
+    "dropped_duplicates": 12283,
+    "num_labels": 17,
+    "label_distribution": {
+      "Invoices": 890,
+      "Customer Support": 881,
+      "Orders": 878,
+      "Payments": 300,
+      "Meetings": 32,
+      "Announcements": 5,
+      "Marketing": 4,
+      "Human Resources": 3,
+      "Legal": 3,
+      "Project Updates": 3,
+      "Recruitment": 3,
+      "Technical Issues": 3,
+      "Training": 3,
+      "Performance Reports": 3,
+      "Reminders": 3,
+      "Deadlines": 3,
+      "General Communication": 3
+    }
+  },
+  "metrics": {
+    "accuracy": 1.0,
+    "f1_macro": 1.0
+  },
+  "threshold": {
+    "min_f1_macro": 0.6,
+    "passed": true
+  },
+  "promoted": true,
+  "artifact_dir": "backend\\artifacts\\models\\tfidf-20260309140326"
+}

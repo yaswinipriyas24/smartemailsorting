@@ -21,13 +21,11 @@ const PrivateRoute = ({ children }) => {
 
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role");
 
   if (!isTokenValid(token)) {
     clearSession();
     return <Navigate to="/login" />;
   }
-  if (role !== "admin") return <Navigate to="/dashboard" />;
 
   return children;
 };

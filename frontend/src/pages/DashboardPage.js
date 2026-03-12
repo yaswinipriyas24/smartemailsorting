@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [fullSyncing, setFullSyncing] = useState(false);
+  const [syncTaskId, setSyncTaskId] = useState("");
+  const [syncTaskState, setSyncTaskState] = useState("");
   const [oauthConnecting, setOauthConnecting] = useState(false);
   const [user, setUser] = useState({ email: "", role: "user", gmail_connected: false });
   const [emails, setEmails] = useState([]);
@@ -102,6 +104,27 @@ export default function DashboardPage() {
   const [reminderWindowHours, setReminderWindow] = useState(
     getStoredPreferences().reminderWindowHours || 24
   );
+
+  const toDisplayBody = useCallback((rawBody) => {
+    if (!rawBody) return "No body content available.";
+    const body = String(rawBody);
+    const looksLikeHtml = /<\s*(html|head|body|table|div|span|p|a|img|style|meta|!doctype)/i.test(body);
+    if (!looksLikeHtml) return body;
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(body, "text/html");
+      const text = doc?.body?.textContent || "";
+      const compact = text
+        .replace(/\u00a0/g, " ")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      return compact || "No readable text extracted from HTML email body.";
+    } catch {
+      return body;
+    }
+  }, []);
 
   const handleUnauthorized = useCallback(() => {
     clearSession();
@@ -324,6 +347,8 @@ export default function DashboardPage() {
 
     try {
       setSyncing(true);
+      setSyncTaskId("");
+      setSyncTaskState("");
       setError("");
 
       // Always re-check on click to avoid stale frontend state.
@@ -339,30 +364,63 @@ export default function DashboardPage() {
         return;
       }
 
-      const syncRes = await axios.post(
-        apiUrl("/sync-emails?limit=20"),
+      const queueRes = await axios.post(
+        apiUrl("/sync-emails/async?limit=20&clear_db=false"),
         {},
-        { headers: { Authorization: `Bearer ${token}` }, timeout: 300000 }
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 }
       );
 
-      if (syncRes?.data?.status === "error") {
-        const msg = String(syncRes?.data?.message || "Sync failed.");
-        const normalized = msg.toLowerCase();
-        if (
-          normalized.includes("oauth") ||
-          normalized.includes("refresh token") ||
-          normalized.includes("gmail oauth not connected") ||
-          normalized.includes("connect gmail")
-        ) {
-          setUser((prev) => ({ ...prev, gmail_connected: false }));
-          await startGoogleOAuth();
-          return;
-        }
-        setError(msg);
+      const taskId = queueRes?.data?.task_id;
+      if (!taskId) {
+        setError("Sync was queued, but task id is missing.");
         return;
       }
+      setSyncTaskId(taskId);
+      setSyncTaskState("PENDING");
 
-      await loadDashboard();
+      const pollStart = Date.now();
+      const maxWaitMs = 10 * 60 * 1000;
+      while (Date.now() - pollStart < maxWaitMs) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const statusRes = await axios.get(
+          apiUrl(`/sync-emails/tasks/${taskId}`),
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 }
+        );
+
+        const state = statusRes?.data?.state || "UNKNOWN";
+        setSyncTaskState(state);
+
+        if (state === "SUCCESS") {
+          const taskResult = statusRes?.data?.result;
+          if (taskResult?.status === "error") {
+            const msg = String(taskResult?.message || "Sync failed.");
+            const normalized = msg.toLowerCase();
+            if (
+              normalized.includes("oauth") ||
+              normalized.includes("refresh token") ||
+              normalized.includes("gmail oauth not connected") ||
+              normalized.includes("connect gmail")
+            ) {
+              setUser((prev) => ({ ...prev, gmail_connected: false }));
+              await startGoogleOAuth();
+              return;
+            }
+            setError(msg);
+            return;
+          }
+          await loadDashboard();
+          return;
+        }
+
+        if (state === "FAILURE") {
+          const msg = String(statusRes?.data?.error || "Sync task failed.");
+          setError(msg);
+          return;
+        }
+      }
+
+      setError("Sync is still running. Please check again in a moment.");
+      return;
     } catch (err) {
       if (err?.response?.status === 401) {
         handleUnauthorized();
@@ -401,6 +459,8 @@ export default function DashboardPage() {
 
     try {
       setFullSyncing(true);
+      setSyncTaskId("");
+      setSyncTaskState("");
       setError("");
 
       const meRes = await axios.get(apiUrl("/auth/me"), {
@@ -415,13 +475,63 @@ export default function DashboardPage() {
         return;
       }
 
-      await axios.post(
-        apiUrl("/sync-emails?limit=200&clear_db=true"),
+      const queueRes = await axios.post(
+        apiUrl("/sync-emails/async?limit=200&clear_db=true"),
         {},
-        { headers: { Authorization: `Bearer ${token}` }, timeout: 600000 }
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 }
       );
 
-      await loadDashboard();
+      const taskId = queueRes?.data?.task_id;
+      if (!taskId) {
+        setError("Full sync was queued, but task id is missing.");
+        return;
+      }
+      setSyncTaskId(taskId);
+      setSyncTaskState("PENDING");
+
+      const pollStart = Date.now();
+      const maxWaitMs = 12 * 60 * 1000;
+      while (Date.now() - pollStart < maxWaitMs) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const statusRes = await axios.get(
+          apiUrl(`/sync-emails/tasks/${taskId}`),
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 60000 }
+        );
+        const state = statusRes?.data?.state || "UNKNOWN";
+        setSyncTaskState(state);
+
+        if (state === "SUCCESS") {
+          const taskResult = statusRes?.data?.result;
+          if (taskResult?.status === "error") {
+            const msg = String(taskResult?.message || "Full sync failed.");
+            const normalized = msg.toLowerCase();
+            if (
+              normalized.includes("invalid_grant") ||
+              normalized.includes("refresh token") ||
+              normalized.includes("token has been expired or revoked") ||
+              normalized.includes("gmail oauth not connected") ||
+              normalized.includes("connect gmail")
+            ) {
+              setUser((prev) => ({ ...prev, gmail_connected: false }));
+              setError("Gmail authorization expired. Redirecting to reconnect...");
+              await startGoogleOAuth();
+              return;
+            }
+            setError(msg);
+            return;
+          }
+          await loadDashboard();
+          return;
+        }
+
+        if (state === "FAILURE") {
+          setError(String(statusRes?.data?.error || "Full sync task failed."));
+          return;
+        }
+      }
+
+      setError("Full sync is still running. Please check again in a moment.");
+      return;
     } catch (err) {
       if (err?.response?.status === 401) {
         handleUnauthorized();
@@ -671,7 +781,7 @@ export default function DashboardPage() {
             <div
               className="urgency-ring"
               style={{
-                background: `conic-gradient(#dc2626 ${analytics.urgentPercent}%, #22c55e ${analytics.urgentPercent}% 100%)`
+                background: `conic-gradient(var(--dash-urgent) ${analytics.urgentPercent}%, var(--dash-normal) ${analytics.urgentPercent}% 100%)`
               }}
             >
               <div className="urgency-ring-center">
@@ -750,6 +860,13 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {(syncTaskId || syncTaskState) && (
+        <div className="insight-banner" style={{ marginBottom: "14px" }}>
+          Sync Task: <strong>{syncTaskState || "QUEUED"}</strong>
+          {syncTaskId ? ` (id: ${syncTaskId.slice(0, 8)}...)` : ""}
+        </div>
+      )}
 
       <div className="email-section">
         <h2 className="section-title section-title-row">
@@ -845,7 +962,7 @@ export default function DashboardPage() {
             <p><strong>To:</strong> {selectedEmail.to_email || user.email}</p>
             <p><strong>Category:</strong> {selectedEmail.category || "General"}</p>
             <hr />
-            <div className="email-body">{selectedEmail.body || "No body content available."}</div>
+            <div className="email-body">{toDisplayBody(selectedEmail.body)}</div>
             <div className="modal-actions">
               <button
                 className="reply-btn"

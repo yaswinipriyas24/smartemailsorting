@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "production_model_id": "tfidf-20260309140326",
+  "models": [
+    {
+      "model_id": "tfidf-20260309135749",
+      "model_type": "tfidf",
+      "artifact_dir": "backend\\artifacts\\models\\tfidf-20260309135749",
+      "metrics": {
+        "accuracy": 0.9850993377483444,
+        "f1_macro": 0.35497162769890045
+      },
+      "data_snapshot": {
+        "dataset_path": "dataset\\emails.csv",
+        "rows_valid": 3020,
+        "num_labels": 17
+      },
+      "status": "staging",
+      "created_at": "2026-03-09T13:57:49.575325+00:00"
+    },
+    {
+      "model_id": "tfidf-20260309135834",
+      "model_type": "tfidf",
+      "artifact_dir": "backend\\artifacts\\models\\tfidf-20260309135834",
+      "metrics": {
+        "accuracy": 1.0,
+        "f1_macro": 1.0
+      },
+      "data_snapshot": {
+        "dataset_path": "dataset\\emails.csv",
+        "rows_valid": 3020,
+        "num_labels": 17
+      },
+      "status": "archived",
+      "created_at": "2026-03-09T13:58:34.245558+00:00"
+    },
+    {
+      "model_id": "tfidf-20260309140326",
+      "model_type": "tfidf",
+      "artifact_dir": "backend\\artifacts\\models\\tfidf-20260309140326",
+      "metrics": {
+        "accuracy": 1.0,
+        "f1_macro": 1.0
+      },
+      "data_snapshot": {
+        "dataset_path": "dataset\\emails.csv",
+        "rows_valid": 3020,
+        "num_labels": 17
+      },
+      "status": "production",
+      "created_at": "2026-03-09T14:03:26.541983+00:00"
+    }
+  ],
+  "updated_at": "2026-03-09T14:03:26.574005+00:00"
+}

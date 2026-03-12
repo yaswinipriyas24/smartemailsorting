@@ -1,5 +1,3 @@
-# backend/ml_model.py
-
 import os
 import logging
 import joblib
@@ -8,34 +6,63 @@ import tensorflow as tf
 import spacy
 from transformers import DistilBertTokenizerFast, TFDistilBertForSequenceClassification
 
+from backend.mlops.registry import get_production_model
+
 # -------------------------------------------------
 # Paths
 # -------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-TFIDF_MODEL_PATH = os.path.join(BASE_DIR, "backend", "tfidf_model.pkl")
+LEGACY_TFIDF_MODEL_PATH = os.path.join(BASE_DIR, "backend", "tfidf_model.pkl")
 BERT_MODEL_PATH = os.path.join(BASE_DIR, "backend", "email_sort_model")
 LABEL_ENCODER_PATH = os.path.join(BASE_DIR, "backend", "label_encoder.pkl")
 
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------
-# Load models (prefer transformer, fallback to TF-IDF)
-# -------------------------------------------------
-label_encoder = joblib.load(LABEL_ENCODER_PATH)
-tfidf_bundle = joblib.load(TFIDF_MODEL_PATH)
-vectorizer = tfidf_bundle["vectorizer"]
-classifier = tfidf_bundle["classifier"]
+def _resolve_tfidf_bundle_path() -> str:
+    production = get_production_model()
+    if production and production.get("model_type") == "tfidf":
+        artifact_dir = production.get("artifact_dir")
+        if artifact_dir:
+            bundle_path = os.path.join(BASE_DIR, artifact_dir, "model_bundle.joblib")
+            if os.path.exists(bundle_path):
+                return bundle_path
+    return LEGACY_TFIDF_MODEL_PATH
 
-USE_TRANSFORMER = True
-try:
+
+def _load_tfidf_models() -> tuple:
+    bundle_path = _resolve_tfidf_bundle_path()
+    if not os.path.exists(bundle_path):
+        raise FileNotFoundError(
+            "No TF-IDF model bundle found. Run `python -m backend.mlops.pipeline` to train and register one."
+        )
+    bundle = joblib.load(bundle_path)
+    return bundle["vectorizer"], bundle["classifier"], bundle_path
+
+
+def _load_transformer_models() -> tuple:
+    label_encoder = joblib.load(LABEL_ENCODER_PATH)
     tokenizer = DistilBertTokenizerFast.from_pretrained("distilbert-base-uncased")
     bert_model = TFDistilBertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
-except Exception as exc:
-    USE_TRANSFORMER = False
-    tokenizer = None
-    bert_model = None
-    logger.warning("Transformer model unavailable, using TF-IDF fallback: %s", exc)
+    return label_encoder, tokenizer, bert_model
+
+
+MODEL_BACKEND = os.getenv("MODEL_BACKEND", "tfidf").strip().lower()
+
+vectorizer, classifier, tfidf_bundle_path = _load_tfidf_models()
+logger.info("Loaded TF-IDF bundle from: %s", tfidf_bundle_path)
+
+USE_TRANSFORMER = MODEL_BACKEND == "transformer"
+label_encoder = None
+tokenizer = None
+bert_model = None
+
+if USE_TRANSFORMER:
+    try:
+        label_encoder, tokenizer, bert_model = _load_transformer_models()
+    except Exception as exc:
+        USE_TRANSFORMER = False
+        logger.warning("Transformer model unavailable, using TF-IDF fallback: %s", exc)
 
 # -------------------------------------------------
 # NLP + rules
@@ -52,9 +79,6 @@ MARKETING_WORDS = [
     "limited time", "deal"
 ]
 
-# -------------------------------------------------
-# MAIN FUNCTION (UPDATED SMART LOGIC)
-# -------------------------------------------------
 def classify_email(subject: str, body: str):
     text = f"{subject} {body}"
     text_lower = text.lower()

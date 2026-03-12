@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
+from celery.result import AsyncResult
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 import logging
@@ -32,6 +33,8 @@ from backend.auth_utils import get_current_user, require_admin, hash_password
 
 from backend.pipeline import run_pipeline
 from backend.gmail_oauth import router as gmail_router
+from backend.celery_worker import celery_app
+from backend.tasks import sync_user_emails_task
 
 # -------------------------------------------------
 # Create FastAPI App
@@ -610,6 +613,55 @@ def sync_emails_endpoint(
         )
 
 
+@app.post("/sync-emails/async")
+def sync_emails_async_endpoint(
+    limit: int = 20,
+    clear_db: bool = False,
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.gmail_email or not current_user.gmail_refresh_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Gmail OAuth not connected. Please connect Gmail.",
+        )
+
+    task = sync_user_emails_task.delay(current_user.id, limit, clear_db)
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "user_id": current_user.id,
+        "limit": limit,
+        "clear_db": clear_db,
+    }
+
+
+@app.get("/sync-emails/tasks/{task_id}")
+def get_sync_task_status(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    result = AsyncResult(task_id, app=celery_app)
+
+    response = {
+        "task_id": task_id,
+        "state": result.state,
+    }
+
+    if result.state == "PENDING":
+        response["message"] = "Task is pending in queue"
+    elif result.state == "STARTED":
+        response["message"] = "Task is running"
+    elif result.state == "SUCCESS":
+        payload = result.result if isinstance(result.result, dict) else {"result": result.result}
+        response["result"] = payload
+        if isinstance(payload, dict) and payload.get("status") == "success":
+            response["owner"] = current_user.id
+    elif result.state == "FAILURE":
+        response["error"] = str(result.result)
+
+    return response
+
+
 # =================================================
 # USER EMAIL ENDPOINTS
 # =================================================
@@ -1108,6 +1160,20 @@ def admin_delete_user(
         raise HTTPException(status_code=400, detail="Admin cannot delete own account")
 
     deleted_email = user.email
+
+    # Remove dependent correction rows first because model_corrections.email_id
+    # references emails.id without DB-level ON DELETE CASCADE.
+    user_email_ids = [email_id for (email_id,) in db.query(Email.id).filter(Email.user_id == user.id).all()]
+    if user_email_ids:
+        db.query(ModelCorrection).filter(ModelCorrection.email_id.in_(user_email_ids)).delete(
+            synchronize_session=False
+        )
+
+    # Also remove rows where this user authored a correction.
+    db.query(ModelCorrection).filter(ModelCorrection.corrected_by == user.id).delete(
+        synchronize_session=False
+    )
+
     db.delete(user)
 
     _record_admin_event(

@@ -1,0 +1,9 @@
+{
+  "run_id": "tfidf-20260309135834",
+  "model_type": "tfidf",
+  "created_at": "2026-03-09T13:58:34.243162+00:00",
+  "metrics": {
+    "accuracy": 1.0,
+    "f1_macro": 1.0
+  }
+}

@@ -226,6 +226,43 @@ http://localhost:3000
 * Sensitive files excluded via `.gitignore`
 * Unique email-user constraint prevents duplication
 
+# MLOps Lifecycle (Production-Ready)
+
+This project now includes an in-repo MLOps lifecycle for the TF-IDF production model:
+
+1. Data validation
+2. Training
+3. Evaluation (accuracy + macro F1)
+4. Model registry update (`backend/artifacts/registry.json`)
+5. Conditional promotion to production
+
+## Run Full MLOps Cycle
+
+```bash
+python -m backend.mlops.pipeline --min-f1 0.60
+```
+
+PowerShell helper:
+
+```powershell
+./scripts/run_mlops_cycle.ps1
+```
+
+Outputs:
+
+* Model artifacts: `backend/artifacts/models/<run_id>/`
+* Registry: `backend/artifacts/registry.json`
+* Last report: `backend/artifacts/last_mlops_report.json`
+
+## Inference Model Selection
+
+`backend/ml_model.py` now loads the promoted production model from the registry.
+
+Optional env flag:
+
+* `MODEL_BACKEND=tfidf` (default, recommended)
+* `MODEL_BACKEND=transformer` (attempts transformer load; falls back to TF-IDF)
+
 # Technologies Used
 
 ### Backend
@@ -252,6 +289,39 @@ http://localhost:3000
 * Real-time notifications
 * Power BI dashboard export
 * Docker deployment
+
+# Celery + Redis (Async Email Sync)
+
+The project now supports asynchronous Gmail sync using Celery workers backed by Redis.
+
+## Docker services
+
+`docker-compose.yml` includes:
+
+* `redis` (broker/result backend)
+* `celery_worker` (executes queued sync tasks)
+
+Start stack:
+
+```bash
+docker compose up -d --build
+```
+
+## Async API endpoints
+
+Queue sync job:
+
+```http
+POST /sync-emails/async?limit=20&clear_db=false
+```
+
+Check task status:
+
+```http
+GET /sync-emails/tasks/{task_id}
+```
+
+States include: `PENDING`, `STARTED`, `SUCCESS`, `FAILURE`.
 
 # Problem Statement Addressed
 

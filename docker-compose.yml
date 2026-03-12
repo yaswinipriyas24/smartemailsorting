@@ -1,6 +1,11 @@
-version: "3.9"
-
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: smart_email_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   db:
     image: postgres:16-alpine
     container_name: smart_email_db
@@ -28,18 +33,43 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql://smart_email:smart_email_password@db:5432/smart_email
+      DATABASE_SSLMODE: disable
       APP_ENV: production
       CORS_ALLOW_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       BACKEND_BASE_URL: http://localhost:8000
       FRONTEND_BASE_URL: http://localhost:3000
       ENABLE_DEADLINE_WORKER: "true"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
       PORT: "8000"
     ports:
       - "8000:8000"
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart_email_celery_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://smart_email:smart_email_password@db:5432/smart_email
+      DATABASE_SSLMODE: disable
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: ["celery", "-A", "backend.celery_worker.celery_app", "worker", "--loglevel=info", "--pool=solo"]
 
   frontend:
     build:
