@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -33,9 +33,12 @@ yarn-error.log*
 Thumbs.db
 
 # Local secrets/credentials
+credentials.json
+token.json
+token.pickle
 backend/credentials.json
-backend/token.pickle
 backend/token.json
+backend/token.pickle
 *.env
 *.env.*
 
