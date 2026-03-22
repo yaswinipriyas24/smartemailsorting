@@ -1,7 +1,12 @@
+import os
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-df = pd.read_csv("dataset/emails.csv")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_PATH = os.path.join(BASE_DIR, "..", "dataset", "emails.csv")
+
+df = pd.read_csv(DATASET_PATH)
 
 print("\n📊 BASIC INFO")
 print("Total records:", len(df))

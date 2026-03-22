@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import spacy
 
@@ -5,7 +7,10 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 
 # Load dataset
-df = pd.read_csv("dataset/emails.csv")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_PATH = os.path.join(BASE_DIR, "..", "dataset", "emails.csv")
+
+df = pd.read_csv(DATASET_PATH)
 
 # Combine subject + body
 df["text"] = df["subject"] + " " + df["body"]

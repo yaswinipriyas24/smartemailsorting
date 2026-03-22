@@ -24,6 +24,7 @@ This system reduces information overload and enhances productivity by intelligen
 * Email Classification Pipeline
 * Deadline Extraction Engine
 * Database Layer (SQLAlchemy + PostgreSQL/Supabase)
+* Key backend modules: `main.py`, `pipeline.py`, `deadline_extractor.py`, `ml_model.py`, `train_model.py`, `tfidf_train.py`
 
 ### Frontend (React)
 
@@ -275,9 +276,9 @@ This system improves by:
 [X] ML Classification Complete <br>
 [X] Deadline Detection Complete <br>
 [X] Gmail OAuth Integrated <br>
-[ ] Multi-user Architecture Stable <br>
-[ ] Dashboard Visualization Implemented <br>
-[ ] Review Ready
+[X] Multi-user Architecture Stable <br>
+[X] Dashboard Visualization Implemented <br>
+[X] Review Ready
 
 
 

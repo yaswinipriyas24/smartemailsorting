@@ -1,4 +1,5 @@
 import csv
+import os
 import random
 from datetime import datetime, timedelta
 
@@ -28,7 +29,10 @@ categories = {
 TOTAL_PER_CATEGORY = 900  # 17 × 900 ≈ 15,300
 start_date = datetime.now()
 
-with open("dataset/emails.csv", "w", newline="", encoding="utf-8") as f:
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_PATH = os.path.join(BASE_DIR, "..", "dataset", "emails.csv")
+
+with open(DATASET_PATH, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["id", "sender", "subject", "body", "label"])
 
