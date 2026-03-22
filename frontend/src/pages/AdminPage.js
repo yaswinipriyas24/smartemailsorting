@@ -45,6 +45,10 @@ export default function AdminPage() {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("user");
 
+  // Feedback management state
+  const [allFeedbacks, setAllFeedbacks] = useState([]);
+  const [adminReplies, setAdminReplies] = useState({});  // { [feedbackId]: { text, status } }
+
   const authHeaders = useMemo(() => {
     const token = getAuthToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -75,15 +79,17 @@ export default function AdminPage() {
       setNotificationEnabled(meRes?.data?.notification_enabled !== false);
       localStorage.setItem("role", "admin");
 
-      const [monitoringRes, emailsRes, usersRes] = await Promise.all([
+      const [monitoringRes, emailsRes, usersRes, feedbackRes] = await Promise.all([
         axios.get(apiUrl("/admin/monitoring"), { headers: authHeaders }),
         axios.get(apiUrl("/emails?limit=200"), { headers: authHeaders }),
-        axios.get(apiUrl("/admin/users"), { headers: authHeaders })
+        axios.get(apiUrl("/admin/users"), { headers: authHeaders }),
+        axios.get(apiUrl("/feedback/admin/all"), { headers: authHeaders }).catch(() => ({ data: { data: [] } })),
       ]);
 
       setMonitoring(monitoringRes.data || null);
       setEmails(Array.isArray(emailsRes?.data?.data) ? emailsRes.data.data : []);
       setUsers(Array.isArray(usersRes?.data?.data) ? usersRes.data.data : []);
+      setAllFeedbacks(Array.isArray(feedbackRes?.data?.data) ? feedbackRes.data.data : []);
     } catch (err) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {
         logout();
@@ -205,6 +211,34 @@ export default function AdminPage() {
 
   const updateLocalUser = (id, field, value) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, [field]: value } : u)));
+  };
+
+  const setAdminReplyField = (feedbackId, field, value) => {
+    setAdminReplies((prev) => ({
+      ...prev,
+      [feedbackId]: { status: "resolved", ...prev[feedbackId], [field]: value },
+    }));
+  };
+
+  const resolveUserFeedback = async (feedbackId) => {
+    const entry = adminReplies[feedbackId];
+    if (!entry?.text?.trim()) {
+      setError("Please type a reply before saving.");
+      return;
+    }
+    try {
+      setError("");
+      setSuccess("");
+      await axios.patch(
+        apiUrl(`/feedback/${feedbackId}/resolve`),
+        { admin_reply: entry.text.trim(), status: entry.status || "resolved" },
+        { headers: authHeaders }
+      );
+      setSuccess(`Feedback #${feedbackId} updated.`);
+      await loadAll();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to update feedback");
+    }
   };
 
   if (loading) return <div className="dashboard">Loading admin dashboard...</div>;
@@ -399,6 +433,85 @@ export default function AdminPage() {
             </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* ── User Feedback Panel ── */}
+      <div className="email-section" style={{ marginTop: "20px" }}>
+        <h2 className="section-title">Step 6: User Feedback</h2>
+        <div className="upcoming-section">
+          {allFeedbacks.length === 0 ? (
+            <p style={{ color: "#94a3b8" }}>No user feedback submitted yet.</p>
+          ) : (
+            allFeedbacks.map((fb) => {
+              const reply = adminReplies[fb.id] || { text: fb.admin_reply || "", status: fb.status || "resolved" };
+              return (
+                <div
+                  key={fb.id}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "14px 16px",
+                    marginBottom: "14px",
+                    background: fb.status === "resolved" ? "#f0fdf4" : "#fffbeb",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                      <span
+                        style={{
+                          background: fb.status === "resolved" ? "#22c55e" : "#f59e0b",
+                          color: "#fff",
+                          padding: "2px 10px",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {fb.status === "resolved" ? "Resolved" : "Pending"}
+                      </span>
+                      <span style={{ fontWeight: 600, fontSize: "14px" }}>
+                        {fb.user_email || `User #${fb.user_id}`}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      {fb.created_at ? new Date(fb.created_at).toLocaleString() : ""}
+                    </span>
+                  </div>
+
+                  <p style={{ margin: "0 0 10px", color: "#334155" }}>{fb.message}</p>
+
+                  <textarea
+                    className="reply-textarea"
+                    placeholder="Type your reply to this feedback..."
+                    value={reply.text}
+                    onChange={(e) => setAdminReplyField(fb.id, "text", e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    style={{ width: "100%", marginBottom: "8px" }}
+                  />
+
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <select
+                      className="reply-textarea"
+                      style={{ minHeight: "36px", marginTop: 0, maxWidth: "160px" }}
+                      value={reply.status}
+                      onChange={(e) => setAdminReplyField(fb.id, "status", e.target.value)}
+                    >
+                      <option value="resolved">Mark Resolved</option>
+                      <option value="pending">Keep Pending</option>
+                    </select>
+                    <button
+                      className="reply-btn"
+                      onClick={() => resolveUserFeedback(fb.id)}
+                    >
+                      Save Reply
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

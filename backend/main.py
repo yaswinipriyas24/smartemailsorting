@@ -29,6 +29,7 @@ from backend.models import (
     RetrainingRun,
 )
 from backend.routes import auth
+from backend.routes import feedback as feedback_routes
 from backend.auth_utils import get_current_user, require_admin, hash_password
 
 from backend.pipeline import run_pipeline
@@ -117,6 +118,7 @@ init_db()
 # Include Routers
 app.include_router(auth.router)
 app.include_router(gmail_router)
+app.include_router(feedback_routes.router)
 
 
 @app.get("/favicon.ico")

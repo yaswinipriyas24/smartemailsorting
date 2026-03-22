@@ -96,6 +96,11 @@ class User(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    feedback = relationship(
+        "UserFeedback",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 # -------------------------------------------------
@@ -172,3 +177,23 @@ class RetrainingRun(Base):
     completed_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="running", index=True)  # running, success, failed
     notes = Column(Text, nullable=True)
+
+
+# -------------------------------------------------
+# User Feedback
+# -------------------------------------------------
+class UserFeedback(Base):
+    __tablename__ = "user_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    message = Column(Text, nullable=False)
+    status = Column(String(20), default="pending", index=True)  # pending, resolved
+
+    admin_reply = Column(Text, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    user = relationship("User", back_populates="feedback")

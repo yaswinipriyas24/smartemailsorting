@@ -89,6 +89,11 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [error, setError] = useState("");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
+  const [myFeedbacks, setMyFeedbacks] = useState([]);
   const [deadlineAlerts, setDeadlineAlerts] = useState({
     count: 0,
     overdue_count: 0,
@@ -206,6 +211,13 @@ export default function DashboardPage() {
     });
   }, []);
 
+  const fetchMyFeedback = useCallback(async (activeToken) => {
+    const feedbackRes = await axios.get(apiUrl("/feedback/my"), {
+      headers: { Authorization: `Bearer ${activeToken}` }
+    });
+    setMyFeedbacks(Array.isArray(feedbackRes?.data?.data) ? feedbackRes.data.data : []);
+  }, []);
+
   const loadDashboard = useCallback(async () => {
     const token = getAuthToken();
     if (!token) {
@@ -253,9 +265,11 @@ export default function DashboardPage() {
         ]);
         setEmails(Array.isArray(emailsRes?.data?.data) ? emailsRes.data.data : []);
         await fetchDeadlineAlerts(token, reminderHours);
+        await fetchMyFeedback(token);
       } catch (emailErr) {
         console.error("Emails load failed:", emailErr);
         setEmails([]);
+        setMyFeedbacks([]);
         setDeadlineAlerts({ count: 0, overdue_count: 0, due_soon_count: 0, data: [] });
         setError("Connected, but failed to load emails.");
       }
@@ -274,7 +288,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [navigate, handleUnauthorized, fetchDeadlineAlerts]);
+  }, [navigate, handleUnauthorized, fetchDeadlineAlerts, fetchMyFeedback]);
 
   useEffect(() => {
     loadDashboard();
@@ -581,6 +595,39 @@ export default function DashboardPage() {
         return;
       }
       setError("Failed to mark email as resolved.");
+    }
+  };
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    const token = getAuthToken();
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
+    if (!feedbackText.trim()) return;
+
+    try {
+      setFeedbackSubmitting(true);
+      setFeedbackSuccess("");
+      setFeedbackError("");
+      await axios.post(
+        apiUrl("/feedback"),
+        { message: feedbackText.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setFeedbackText("");
+      setFeedbackSuccess("Your feedback has been sent to the admin.");
+      await fetchMyFeedback(token);
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setFeedbackError(err?.response?.data?.detail || "Failed to send feedback.");
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
 
@@ -976,6 +1023,92 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <div className="email-section" style={{ marginTop: "24px" }}>
+        <h2 className="section-title section-title-row">
+          <FaEnvelope />
+          Feedback To Admin
+        </h2>
+        <div className="upcoming-section">
+          <p className="user-subtitle" style={{ marginTop: 0, marginBottom: "12px" }}>
+            Send issues, suggestions, or correction requests to the admin. Replies will appear below.
+          </p>
+          <form onSubmit={handleFeedbackSubmit}>
+            <textarea
+              className="reply-textarea"
+              placeholder="Write your feedback for the admin..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              style={{ width: "100%", marginTop: 0 }}
+            />
+            {feedbackSuccess && (
+              <div className="insight-banner" style={{ marginTop: "12px", marginBottom: "12px" }}>
+                {feedbackSuccess}
+              </div>
+            )}
+            {feedbackError && (
+              <div className="user-error" style={{ padding: "10px", marginTop: "12px", marginBottom: "12px" }}>
+                {feedbackError}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
+              <button
+                type="submit"
+                className="reply-btn"
+                disabled={feedbackSubmitting || !feedbackText.trim()}
+              >
+                {feedbackSubmitting ? "Sending..." : "Send Feedback"}
+              </button>
+            </div>
+          </form>
+
+          <div style={{ marginTop: "20px" }}>
+            <h3 style={{ marginTop: 0 }}>My Feedback History</h3>
+            {myFeedbacks.length === 0 ? (
+              <p className="viz-empty">No feedback submitted yet.</p>
+            ) : (
+              myFeedbacks.map((feedback) => (
+                <div
+                  key={feedback.id}
+                  style={{
+                    border: "1px solid var(--dash-border-soft)",
+                    borderRadius: "14px",
+                    padding: "14px 16px",
+                    marginBottom: "12px",
+                    background: "var(--dash-card)",
+                    boxShadow: "var(--dash-shadow)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                    <strong>{feedback.status === "resolved" ? "Resolved" : "Pending"}</strong>
+                    <span style={{ color: "var(--dash-muted)", fontSize: "14px" }}>
+                      {feedback.created_at ? new Date(feedback.created_at).toLocaleString() : ""}
+                    </span>
+                  </div>
+                  <p style={{ marginTop: "10px", marginBottom: feedback.admin_reply ? "12px" : 0 }}>
+                    {feedback.message}
+                  </p>
+                  {feedback.admin_reply && (
+                    <div
+                      style={{
+                        padding: "12px",
+                        borderRadius: "10px",
+                        background: "var(--dash-card-soft)",
+                        borderLeft: "4px solid var(--dash-accent-teal)"
+                      }}
+                    >
+                      <strong>Admin Reply</strong>
+                      <p style={{ marginBottom: 0 }}>{feedback.admin_reply}</p>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

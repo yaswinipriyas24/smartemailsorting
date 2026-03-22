@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../styles/dashboard.css";
+import { apiUrl } from "../utils/api";
 
 const ALL_CATEGORIES = [
   "Announcements",
@@ -34,6 +35,13 @@ function UserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Feedback state
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSuccess, setFeedbackSuccess] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
+  const [myFeedbacks, setMyFeedbacks] = useState([]);
+
   useEffect(() => {
     if (!token) {
       navigate("/login");
@@ -53,7 +61,42 @@ function UserPage() {
         setError("Failed to load emails.");
       })
       .finally(() => setLoading(false));
+
+    // Load user's own feedback history
+    axios
+      .get(apiUrl("/feedback/my"), { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => setMyFeedbacks(res.data?.data || []))
+      .catch(() => {});
   }, [navigate, token]);
+
+  const fetchMyFeedback = () => {
+    axios
+      .get(apiUrl("/feedback/my"), { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => setMyFeedbacks(res.data?.data || []))
+      .catch(() => {});
+  };
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    if (!feedbackText.trim()) return;
+    setFeedbackSubmitting(true);
+    setFeedbackSuccess("");
+    setFeedbackError("");
+    try {
+      await axios.post(
+        apiUrl("/feedback"),
+        { message: feedbackText.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setFeedbackSuccess("Your feedback has been sent to the admin.");
+      setFeedbackText("");
+      fetchMyFeedback();
+    } catch {
+      setFeedbackError("Failed to send feedback. Please try again.");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
 
   const sortedEmails = useMemo(() => {
     return [...emails].sort((a, b) => {
@@ -248,6 +291,95 @@ function UserPage() {
           </div>
         </div>
       )}
+
+      {/* ── Feedback Section ── */}
+      <div className="email-section" style={{ marginTop: "32px" }}>
+        <h2 className="section-title">Send Feedback to Admin</h2>
+        <div className="upcoming-section">
+          <p style={{ marginBottom: "10px", color: "#64748b" }}>
+            Have a suggestion, issue, or question? Write to the admin below.
+          </p>
+          <form onSubmit={handleFeedbackSubmit}>
+            <textarea
+              className="reply-textarea"
+              placeholder="Describe your feedback or issue..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+            {feedbackSuccess && (
+              <div className="insight-banner" style={{ marginBottom: "8px" }}>
+                {feedbackSuccess}
+              </div>
+            )}
+            {feedbackError && (
+              <div className="user-error" style={{ marginBottom: "8px" }}>
+                {feedbackError}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="reply-btn"
+              disabled={feedbackSubmitting || !feedbackText.trim()}
+            >
+              {feedbackSubmitting ? "Sending..." : "Send Feedback"}
+            </button>
+          </form>
+
+          {myFeedbacks.length > 0 && (
+            <div style={{ marginTop: "24px" }}>
+              <h3 style={{ marginBottom: "10px" }}>My Feedback History</h3>
+              {myFeedbacks.map((fb) => (
+                <div
+                  key={fb.id}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "12px 16px",
+                    marginBottom: "12px",
+                    background: fb.status === "resolved" ? "#f0fdf4" : "#fffbeb"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span
+                      className="badge"
+                      style={{
+                        background: fb.status === "resolved" ? "#22c55e" : "#f59e0b",
+                        color: "#fff",
+                        padding: "2px 10px",
+                        borderRadius: "12px",
+                        fontSize: "12px"
+                      }}
+                    >
+                      {fb.status === "resolved" ? "Resolved" : "Pending"}
+                    </span>
+                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      {fb.created_at ? new Date(fb.created_at).toLocaleString() : ""}
+                    </span>
+                  </div>
+                  <p style={{ margin: "0 0 6px", fontWeight: 500 }}>{fb.message}</p>
+                  {fb.admin_reply && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        padding: "8px 12px",
+                        background: "#eff6ff",
+                        borderRadius: "6px",
+                        borderLeft: "3px solid #3b82f6"
+                      }}
+                    >
+                      <strong style={{ fontSize: "12px", color: "#3b82f6" }}>Admin Reply:</strong>
+                      <p style={{ margin: "4px 0 0" }}>{fb.admin_reply}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

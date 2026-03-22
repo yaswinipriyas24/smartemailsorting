@@ -1,6 +1,12 @@
+import os
 import csv
 import random
 from datetime import datetime, timedelta
+
+# Get dataset directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_DIR = os.path.join(BASE_DIR, "dataset")
+os.makedirs(DATASET_DIR, exist_ok=True)
 
 # -----------------------------
 # Categories (FINAL – clean)
@@ -27,8 +33,9 @@ categories = {
 
 TOTAL_PER_CATEGORY = 900  # 17 × 900 ≈ 15,300
 start_date = datetime.now()
+DATASET_PATH = os.path.join(DATASET_DIR, "emails.csv")
 
-with open("dataset/emails.csv", "w", newline="", encoding="utf-8") as f:
+with open(DATASET_PATH, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["id", "sender", "subject", "body", "label"])
 
